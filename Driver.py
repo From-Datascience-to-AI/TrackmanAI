@@ -14,7 +14,7 @@ import sys
 import DirectKey
 import socket
 from struct import unpack
-import GetData
+import GetData as GetData
 import threading
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'

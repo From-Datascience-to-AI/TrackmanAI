@@ -7,7 +7,7 @@ import threading
 
 from MapExtractor import get_map_data, plot_map
 from Commands import tm_accelerate, tm_brake, tm_reset, tm_respawn, tm_steer, tm_update
-import GetData
+import GetData as GetData
 
 STEER = 0
 ACCELERATE = 1

@@ -1,30 +1,26 @@
-# Training script for NEAT
-#
-# Switch to Trackmania and press s to begin
-# The script will simulate all runs automatically for the number of generations
-#
-# python NEAT_Trainer
-
-from __future__ import print_function
-import os
-import neat
-import keyboard
-import DirectKey
-import sys
-import time
-import numpy as np
+from tminterface.client import Client, run_client
+from tminterface.interface import TMInterface
+from tminterface.constants import DEFAULT_SERVER_SIZE
+import signal
 from PIL import ImageGrab, ImageEnhance, Image
+import keyboard
+import sys
+import numpy as np
+import neat
+import time
+import os
 import cv2
-import socket
-from struct import unpack
-import vgamepad as vg
-import GetData
-import threading
+import win32gui
+import DirectKey
+import pickle as pickle
+
+KEY_ENTER = 0x1C
+
 # In order to visualize the training net, you need to copy visualize.py file into the NEAT directory (you can find it in the NEAT repo)
 # Because of the licence, I am not going to copy it to my github repository
 # You can still train your network without it
 try:
-    import NEAT.visualize as visualize
+    import neat.visualize as visualize
 except ModuleNotFoundError:
     print('Missing visualize.py file.')
 
@@ -41,46 +37,320 @@ image_height = 100
 
 # hyperparams
 #threshold = 0.5
-no_generations = 20
+no_generations = 1000
+
 #max_fitness = 100.0
-no_seconds = 20
-kill_seconds = 5
-kill_speed = 51
+gamespeed=1
+skip_frames=5
+no_seconds = 40
+kill_seconds = 3
+kill_steps= kill_seconds*60
+kill_speed = 20
 no_lines = 5
-checkpoint = None
+checkpoint = None#"neat-checkpoint-280"
+gen=0 #current gen
+max_gen=280
+server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
 
-up = False
-down = False
-left = False
-right = False
-
-KEY_UP = 0xC8
-KEY_DOWN = 0xD0
-KEY_LEFT = 0xCB
-KEY_RIGHT = 0xCD
-KEY_DELETE = 0xD3
-
-gamepad = vg.VX360Gamepad()
-
-def data_getter_function():
-    global data
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect(("127.0.0.1", 9000))
-        while True:
-            data = GetData.get_data(s)
+def save_replay(num_gen,num_genome):
+    #impossible to place into the physics tick
+    #search for a quicker way to save the replays
+    pass
+    #keyboard.press_and_release('up')
+    #keyboard.press_and_release('up')
+    #keyboard.press_and_release('up')
+    #keyboard.press('del')
+    #time.sleep(3)
+    #keyboard.release('del')
+    #keyboard.write(str(num_gen).zfill(3),'_'+str(num_genome).zfill(5))
+    #keyboard.press_and_release('down')
+    #keyboard.press_and_release('left')
+    #keyboard.press_and_release('enter')
+    #time.sleep(0.5)
+    #keyboard.press_and_release('enter')
 
 
-data_getter_thread = threading.Thread(target=data_getter_function, daemon=True)
-data_getter_thread.start()
+class MainClient(Client):
+    def __init__(self):
+        super(MainClient,self).__init__()
+
+    def on_registered(self, iface: TMInterface):
+        print(f'Registered to {iface.server_name}')
+        #set gamespeed
+        iface.set_speed(5)
+        #set map start
+        
+
+    def on_deregistered(self,iface):
+        print(f'deregistered to {iface.server_name}')
+
+    def on_shutdown(self, iface):
+        pass
+
+    def on_run_step(self, iface, _time:int):
+        iface.log("youpi")
+        #update nn situation
+        #input to nn
+        #output from nn
+        #execute the output
+        pass
+
+    def on_simulation_begin(self, iface):
+        pass
+
+    def on_simulation_step(self, iface, _time:int):
+        pass
+
+    def on_simulation_end(self, iface, result:int):
+        pass
+
+    def on_checkpoint_count_changed(self, iface, current:int, target:int):
+        #add reward to NN
+        #choose to stop the run or not
+        pass
+
+    def on_lap_count_changed(self, iface, current:int):
+        #add reward to NN
+        #choose to stop the run or not
+        pass
+
+    def on_custom_command(self, iface, time_from: int, time_to: int, command: str, args: list):
+        """
+        Called when a custom command has been executed by the user.
+        Args:
+            iface (TMInterface): the TMInterface object
+            time_from (int): if provided by the user, the starting time of the command, otherwise -1
+            time_to (int): if provided by the user, the ending time of the command, otherwise -1
+            command (str): the command name being executed
+            args (list): the argument list provided by the user
+        """
+        pass
+
+    
+    def on_client_exception(self, iface, exception: Exception):
+        """
+        Called when a client exception is thrown. This can happen if opening the shared file fails, or reading from
+        it fails.
+        Args:
+            iface (TMInterface): the TMInterface object
+            exception (Exception): the exception being thrown
+        """
+        print(f'[Client] Exception reported: {exception}')
+
+class GenClient(Client):
+    def __init__(self,L_net,max_steps):
+        super(GenClient,self).__init__()
+        self.respawn_steps=4*60
+        self.fitness=0
+        self.max_steps=max_steps+self.respawn_steps
+        self.current_i=0
+        self.net=L_net[0]
+        self.max_i=len(L_net)
+        self.current_step=0
+        self.skip_frames=skip_frames
+        self.L_coords=[[] for i in range(len(L_net))]
+        self.L_speeds=[[] for i in range(len(L_net))]
+        self.L_fit=[0 for i in range(len(L_net))]
+        self.L_net=L_net
+        self.checkpoint_count=0
+
+    def on_registered(self, iface: TMInterface):
+        print(f'Registered to {iface.server_name}')
+        #iface.log("Ready. Genome id: " + str(self.genome_id))
+        #set gamespeed
+        iface.set_timeout(5000)
+        iface.set_speed(gamespeed)
+        iface.give_up()
+        
+
+    def on_deregistered(self,iface):
+        print(f'deregistered to {iface.server_name}')
+
+    def on_shutdown(self, iface):
+        pass
+
+    def on_run_step(self, iface, _time:int):
+        state=iface.get_simulation_state()
+        speed=state.velocity
+        self.L_speeds[self.current_i].append(speed)
+        self.L_coords[self.current_i].append(state.position)
+        speed=sum([abs(speed[i]) for i in range(3)])
+        self.speed=speed
+        if self.current_step<self.respawn_steps:
+            self.current_step+=1
+            if self.current_step==1:
+                self.img = ImageGrab.grab()
+                self.img = mod_shrink_n_measure(self.img, image_width, image_height, no_lines)
+                try:
+                    self.img = self.img / 255.0
+                except:
+                    self.img = self.img
+                self.img.append(speed)
+                output = np.array(self.net.activate(self.img))
+                #accelerate - brake
+                self.accelerate=output[1]>0
+                self.brake= output[2]>0
+                #steer
+                steer = output[0]
+                self.steer = int(steer*65536)
+
+        else:
+            #init img
+            if self.current_step%self.skip_frames==0:
+                self.img = ImageGrab.grab()
+                #self.img.save("test.png")
+                self.img = mod_shrink_n_measure(self.img, image_width, image_height, no_lines)
+                #Image.fromarray(np.array(self.img)).save("test2.png")
+                try:
+                    self.img = self.img / 255.0
+                except:
+                    self.img = self.img
+                self.img.append(speed)
+                output = np.array(self.net.activate(self.img))
+                #accelerate - brake
+                self.accelerate=output[1]>0
+                self.brake= output[2]>0
+                #steer
+                steer = output[0]
+                self.steer = int(steer*65536)
+
+            iface.set_input_state(accelerate=self.accelerate,brake=self.brake,steer=self.steer)
+            #score for moving up to 0.04 per frame
+            self.fitness+=self.speed/10000
+
+            self.current_step+=1
+            #update nn situation
+            #input to nn
+            #output from nn
+            #execute the output
+            if self.current_step>=self.max_steps:
+                iface.log(str(self.fitness))
+                self.checkpoint_count=0
+                save_replay(gen,self.current_i)
+                iface.give_up()
+                self.L_fit[self.current_i]=self.fitness
+                self.fitness=0
+                self.current_i+=1
+
+                if self.current_i<self.max_i:
+                    self.net=self.L_net[self.current_i]
+                    self.current_step=0
+                else:
+                    iface.close()
+            else:
+                if self.current_step>self.respawn_steps+kill_steps and self.speed<kill_speed:
+                    #iface.log(str(self.speed))
+                    iface.log(str(self.fitness))
+                    self.checkpoint_count=0
+                    save_replay(gen,self.current_i)
+                    iface.give_up()
+                    self.L_fit[self.current_i]=self.fitness
+                    self.fitness=0
+                    self.current_i+=1
+
+                    if self.current_i<self.max_i:
+                        self.net=self.L_net[self.current_i]
+                        self.current_step=0
+                    else:
+                        iface.close()
+
+    def on_simulation_begin(self, iface):
+        pass
+
+    def on_simulation_step(self, iface, _time:int):
+        pass
+
+    def on_simulation_end(self, iface, result:int):
+        #pas call dans les run
+        pass
+
+    def on_checkpoint_count_changed(self, iface, current:int, target:int):
+        self.fitness+=1000/(self.current_step/60)
+        self.checkpoint_count+=1
+        if self.checkpoint_count==3:#case of a finish on A01
+            self.checkpoint_count=0
+            self.fitness+=10000/(self.current_step/60)
+            iface.log(str(self.fitness))
+            iface.prevent_simulation_finish()
+            save_replay(gen,self.current_i)
+            iface.give_up()
+            self.L_fit[self.current_i]=self.fitness
+            self.fitness=0
+            self.current_i+=1
+
+            if self.current_i<self.max_i:
+                self.net=self.L_net[self.current_i]
+                self.current_step=0
+            else:
+                iface.close()
+        #add reward to NN
+        #choose to stop the run or not
+        pass
+
+    def on_lap_count_changed(self, iface, current:int):
+        #pas call quand fin de race
+        iface.log('YOUPI')
+        #add reward to NN
+        #choose to stop the run or not
+        pass
+
+    def on_custom_command(self, iface, time_from: int, time_to: int, command: str, args: list):
+        """
+        Called when a custom command has been executed by the user.
+        Args:
+            iface (TMInterface): the TMInterface object
+            time_from (int): if provided by the user, the starting time of the command, otherwise -1
+            time_to (int): if provided by the user, the ending time of the command, otherwise -1
+            command (str): the command name being executed
+            args (list): the argument list provided by the user
+        """
+        pass
+
+    
+    def on_client_exception(self, iface, exception: Exception):
+        """
+        Called when a client exception is thrown. This can happen if opening the shared file fails, or reading from
+        it fails.
+        Args:
+            iface (TMInterface): the TMInterface object
+            exception (Exception): the exception being thrown
+        """
+        print(f'[Client] Exception reported: {exception}')
+
+
+def run_client_gen(client: Client, server_name: str = 'TMInterface0', buffer_size=DEFAULT_SERVER_SIZE):
+    """
+    Connects to a server with the specified server name and registers the client instance.
+    The function closes the connection on SIGBREAK and SIGINT signals and will block
+    until the client is deregistered in any way. You can set the buffer size yourself to use for
+    the connection, by specifying the buffer_size parameter. Using a custom size requires
+    launching TMInterface with the /serversize command line parameter: TMInterface.exe /serversize=size.
+    Args:
+        client (Client): the client instance to register
+        server_name (str): the server name to connect to, TMInterface0 by default
+        buffer_size (int): the buffer size to use, the default size is defined by tminterface.constants.DEFAULT_SERVER_SIZE
+    """
+
+    iface = TMInterface(server_name, buffer_size)
+
+    def handler(signum, frame):
+        iface.close()
+
+    signal.signal(signal.SIGBREAK, handler)
+    signal.signal(signal.SIGINT, handler)
+
+    iface.register(client)
+
+    while iface.running:
+        time.sleep(0)#0 before
+    return client.L_fit,client.L_coords,client.L_speeds
 
 def sigmoid(x):
     return 1/(1 + np.exp(-x))
 
-
 def initial_crop(img, l, u, r, d):
     img = img.crop((l, u, img.size[0]-r, img.size[1]-d))
     return img
-
 
 def mod_edge(img, w, h):
     img = initial_crop(img, 0, img.size[1]//2, 0, img.size[1]//3)
@@ -140,68 +410,28 @@ def run_inference(img_np, end_points):
 
 
 def eval_genomes(genomes, config):
+    global gen
+    if gen<max_gen:
+        gen+=1
+    L_net=[]
     for genome_id, genome in genomes:
-        genome.fitness = 10.0
         net = neat.nn.FeedForwardNetwork.create(genome, config)
-        
-        # Driving
-        print("Ready. Genome id: " + str(genome_id))
+        L_net.append(net)
+    L_fit,L_coords,L_speeds=run_client_gen(GenClient(L_net,60+10*gen),server_name) #1/6 de sec en plus par génération
 
-        distance = 0.0
-        time.sleep(1)
-
-        DirectKey.PressKey(KEY_DELETE)
-        DirectKey.ReleaseKey(KEY_DELETE)
-        begin = time.time()
-
-
-        while True:
-
-            # uncomment for reaction time measurement
-            # start = time.time()
-
-            # screenshot
-            img = ImageGrab.grab()
-
-            img = mod_shrink_n_measure(img, image_width, image_height, no_lines)
-
-            try:
-                img = img / 255.0
-            except:
-                img = img
-
-            # speed
-            speed = data['speed']*3.6
-            distance = data['distance']
-
-            img.append(speed)
-
-            # net
-            output = np.array(net.activate(img))
-
-            brake = output[2]
-            gas = output[1]
-            steer = output[0]
-
-            steer = steer * 2 - 1
-            
-            gamepad.left_joystick_float(x_value_float=steer, y_value_float=0)
-            gamepad.right_trigger_float(value_float=gas)
-            gamepad.left_trigger_float(value_float=brake)
-            gamepad.update()
-
-            # stop = time.time()
-            # print(stop - start) # reaction time
-            finish = time.time()-begin
-            if finish > no_seconds or (finish > kill_seconds and speed < kill_speed):
-                gamepad.reset()
-                gamepad.update()
-                break
-        
-        genome.fitness = distance
-
+    for i in range(len(L_fit)):
+        genomes[i][1].fitness=L_fit[i]
+    filename = 'Coords/'+str(gen).zfill(3)+'.pickle'
+    outfile = open(filename,'wb')
+    pickle.dump(L_coords,outfile)
+    outfile.close()
+    filename = 'Speeds/'+str(gen).zfill(3)+'.pickle'
+    outfile = open(filename,'wb')
+    pickle.dump(L_speeds,outfile)
+    outfile.close()
 
 def run(config_file, checkpoint=None):
+
     # Load configuration.
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
@@ -218,8 +448,8 @@ def run(config_file, checkpoint=None):
     p.add_reporter(stats)
     p.add_reporter(neat.Checkpointer(5))
 
-
     # Run for up to global no generations.
+    
     winner = p.run(eval_genomes, no_generations)
 
     # Display the winning genome.
@@ -240,14 +470,35 @@ def run(config_file, checkpoint=None):
     # p = neat.Checkpointer.restore_checkpoint('neat-checkpoint-9')
     # p.run(eval_genomes, 10)
 
-local_dir = os.getcwd()
-config_path = os.path.join(local_dir, 'config-feedforward')
-print('Press s to begin.')
-keyboard.wait('s')
 
-if checkpoint == None:
-    for cpt in os.listdir('.'):
-        if cpt[:4] == 'neat':
-            os.unlink('./'+cpt)
 
-run(config_path, checkpoint)
+
+#totest: 
+#on lance le NEAT
+#1 client pour initialiser la simulation
+#on kill le client
+#1 client par genome
+#on limite le nombre de steps autorisées
+#on affiche dans la console le score du genome
+#on affiche dans la console les resultats de la simu
+
+def main():
+    #print(f'Connecting to {server_name}...')
+    #run_client(MainClient(),server_name)
+    #fit=run_client_genome(GenomeClient(None,10),server_name)
+    #print(fit)
+    local_dir = os.getcwd()
+    config_path = os.path.join(local_dir, 'config-feedforward')
+    print('Press z to begin.')
+    keyboard.wait('z')
+
+    if checkpoint == None:
+        for cpt in os.listdir('.'):
+            if cpt[:4] == 'neat':
+                os.unlink('./'+cpt)
+
+    run(config_path, checkpoint)
+    
+
+if __name__ == '__main__':
+    main()

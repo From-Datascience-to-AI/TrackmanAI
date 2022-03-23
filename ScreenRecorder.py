@@ -13,7 +13,7 @@ import pathlib
 import sys
 import socket
 from struct import unpack
-import GetData
+import GetData as GetData
 import threading
 from Screenshot import screenshot
 
