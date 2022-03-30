@@ -1,4 +1,5 @@
 from mimetypes import init
+from msilib.schema import Error
 from this import s
 from tminterface.client import Client, run_client
 from tminterface.interface import TMInterface
@@ -17,7 +18,7 @@ import DirectKey
 import pickle as pickle
 from multiprocessing import Process
 
-def save_replay(num_gen,num,time_wait,init):
+def save_replay(num_gen,num,time_wait,init,init_gen):
     #impossible to place into the physics tick
     #search for a quicker way to save the replays
     keyboard.press_and_release('s')
@@ -35,11 +36,19 @@ def save_replay(num_gen,num,time_wait,init):
     keyboard.release('shift')
     time.sleep(time_wait)
     if not init:
-        for i in range(13):
-            keyboard.press_and_release(14)
-            time.sleep(time_wait)
-    time.sleep(time_wait)
-    keyboard.write(str(num_gen).zfill(5)+'_'+str(num).zfill(7))
+        if init_gen:
+            for i in range(13):
+                keyboard.press_and_release(14)
+                time.sleep(time_wait)
+            keyboard.write(str(num_gen).zfill(5)+'_'+str(num).zfill(7))
+        else:
+            for i in range(7):
+                keyboard.press_and_release(14)
+                time.sleep(time_wait)
+            keyboard.write(str(num).zfill(7))
+    else:
+        time.sleep(time_wait)
+        keyboard.write(str(num_gen).zfill(5)+'_'+str(num).zfill(7))
     time.sleep(time_wait)
     keyboard.press_and_release('Enter')
     time.sleep(time_wait)
@@ -53,6 +62,9 @@ def save_replay(num_gen,num,time_wait,init):
     time.sleep(time_wait)
     keyboard.press_and_release('Enter')#in case of overwritting a replay
     time.sleep(time_wait)
+    keyboard.press_and_release('Enter')
+    time.sleep(time_wait)
+
 
 KEY_ENTER = 0x1C
 
@@ -85,13 +97,13 @@ skip_frames=5
 no_seconds = 40
 kill_seconds = 3
 kill_steps= kill_seconds*60
-kill_speed = -1#20
+kill_speed = -1
 no_lines = 5
-checkpoint = None#"neat-checkpoint-280"
-gen=10 #current gen
+checkpoint = None #"neat-checkpoint-11"
+gen=0 #current gen
 max_gen=280
 server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
-
+init=True
 
 
 
@@ -112,6 +124,8 @@ class GenClient(Client):
         self.L_fit=[0 for i in range(len(L_net))]
         self.L_net=L_net
         self.checkpoint_count=0
+        self.to_save=False
+        self.time=-9999
 
     def on_registered(self, iface: TMInterface):
         print(f'Registered to {iface.server_name}')
@@ -119,9 +133,8 @@ class GenClient(Client):
         #set gamespeed
         iface.set_timeout(5000)
         iface.set_speed(gamespeed)
-        iface.register_custom_command('save_replay')
         iface.give_up()
-        
+    
 
     def on_deregistered(self,iface):
         print(f'deregistered to {iface.server_name}')
@@ -130,6 +143,7 @@ class GenClient(Client):
         pass
 
     def on_run_step(self, iface, _time:int):
+        self.time=_time
         state=iface.get_simulation_state()
         speed=state.velocity
         self.L_speeds[self.current_i].append(speed)
@@ -186,8 +200,7 @@ class GenClient(Client):
             if self.current_step>=self.max_steps:
                 iface.log(str(self.fitness))
                 self.checkpoint_count=0
-                iface.execute_command('save_replay')
-                iface.give_up()
+                
                 self.L_fit[self.current_i]=self.fitness
                 self.fitness=0
                 self.current_i+=1
@@ -195,15 +208,16 @@ class GenClient(Client):
                 if self.current_i<self.max_i:
                     self.net=self.L_net[self.current_i]
                     self.current_step=0
+                    self.to_save=True
                 else:
+                    self.to_save=True
                     iface.close()
             else:
                 if self.current_step>self.respawn_steps+kill_steps and self.speed<kill_speed:
                     #iface.log(str(self.speed))
                     iface.log(str(self.fitness))
                     self.checkpoint_count=0
-                    iface.execute_command('save_replay')
-                    iface.give_up()
+                    
                     self.L_fit[self.current_i]=self.fitness
                     self.fitness=0
                     self.current_i+=1
@@ -211,7 +225,9 @@ class GenClient(Client):
                     if self.current_i<self.max_i:
                         self.net=self.L_net[self.current_i]
                         self.current_step=0
+                        self.to_save=True
                     else:
+                        self.to_save=True
                         iface.close()
 
     def on_simulation_begin(self, iface):
@@ -227,13 +243,12 @@ class GenClient(Client):
     def on_checkpoint_count_changed(self, iface, current:int, target:int):
         self.fitness+=1000/(self.current_step/60)
         self.checkpoint_count+=1
-        if self.checkpoint_count==3:#case of a finish on A01
+        if current==target:#case of a finish
             self.checkpoint_count=0
             self.fitness+=10000/(self.current_step/60)
             iface.log(str(self.fitness))
             iface.prevent_simulation_finish()
-            iface.register_custom_command('save_replay')
-            iface.give_up()
+            
             self.L_fit[self.current_i]=self.fitness
             self.fitness=0
             self.current_i+=1
@@ -241,17 +256,16 @@ class GenClient(Client):
             if self.current_i<self.max_i:
                 self.net=self.L_net[self.current_i]
                 self.current_step=0
+                self.to_save=True
             else:
+                self.to_save=True
                 iface.close()
+                
         #add reward to NN
         #choose to stop the run or not
         pass
 
     def on_lap_count_changed(self, iface, current:int):
-        #pas call quand fin de race
-        iface.log('YOUPI')
-        #add reward to NN
-        #choose to stop the run or not
         pass
 
     def on_custom_command(self, iface, time_from: int, time_to: int, command: str, args: list):
@@ -264,13 +278,9 @@ class GenClient(Client):
             command (str): the command name being executed
             args (list): the argument list provided by the user
         """
-        if command=='save_replay':
-            p=Process(target=save_replay,args=())
-            p.start()
-            p.join()
         pass
 
-    
+
     def on_client_exception(self, iface, exception: Exception):
         """
         Called when a client exception is thrown. This can happen if opening the shared file fails, or reading from
@@ -298,7 +308,7 @@ class GenomeClient(Client):
         print(f'Registered to {iface.server_name}')
         #iface.log("Ready. Genome id: " + str(self.genome_id))
         #set gamespeed
-        iface.set_timeout(5000)
+        iface.set_timeout(900)
         iface.set_speed(gamespeed)
         iface.give_up()
         
@@ -389,7 +399,7 @@ class GenomeClient(Client):
     def on_checkpoint_count_changed(self, iface, current:int, target:int):
         self.fitness+=1000/(self.current_step/60)
         self.checkpoint_count+=1
-        if self.checkpoint_count==3:#case of a finish on A01
+        if current==target:#case of a finish on A01
             self.checkpoint_count=0
             self.fitness+=10000/(self.current_step/60)
             iface.log(str(self.fitness))
@@ -441,7 +451,7 @@ def run_client_gen(client: Client, server_name: str = 'TMInterface0', buffer_siz
         server_name (str): the server name to connect to, TMInterface0 by default
         buffer_size (int): the buffer size to use, the default size is defined by tminterface.constants.DEFAULT_SERVER_SIZE
     """
-
+    global gen, init
     iface = TMInterface(server_name, buffer_size)
 
     def handler(signum, frame):
@@ -450,10 +460,30 @@ def run_client_gen(client: Client, server_name: str = 'TMInterface0', buffer_siz
     signal.signal(signal.SIGBREAK, handler)
     signal.signal(signal.SIGINT, handler)
 
-    iface.register(client)
+    reg=iface.register(client)
+    time.sleep(1)
+    iface.execute_command("clear")
+    iface.give_up()
+    init_gen=True
+    client.current_step=0
+    for n_genome in range(100):
+        print(n_genome)
+        while not client.to_save:
+            time.sleep(0)
+        save_replay(gen,n_genome,0.2,init,init_gen)
+        init=False
+        init_gen=False
+        if n_genome<99:
+            client.to_save=False
+            while client.time>0:
+                keyboard.press_and_release('enter')
+                time.sleep(0.2)
+            client.to_save=False
+            time.sleep(0.1)
+            client.current_step=0
+            iface.give_up()
+    iface.close()
 
-    while iface.running:
-        time.sleep(0)#0 before
     return client.L_fit,client.L_coords,client.L_speeds
 
 def run_client_genome(client: Client, server_name: str = 'TMInterface0', buffer_size=DEFAULT_SERVER_SIZE):
@@ -477,7 +507,12 @@ def run_client_genome(client: Client, server_name: str = 'TMInterface0', buffer_
     signal.signal(signal.SIGBREAK, handler)
     signal.signal(signal.SIGINT, handler)
 
-    iface.register(client)
+    reg=iface.register(client)
+
+    while not reg:
+        Error
+        time.sleep(0.1)
+        reg=iface.register(client) 
 
     while iface.running:
         time.sleep(0)#0 before
@@ -555,7 +590,7 @@ def eval_genomes(genomes, config):
     for genome_id, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         L_net.append(net)
-    L_fit,L_coords,L_speeds=run_client_gen(GenClient(L_net,60+10*gen),server_name) #1/6 de sec en plus par génération
+    L_fit,L_coords,L_speeds=run_client_gen(GenClient(L_net,180+10*gen),server_name) #1/6 de sec en plus par génération
 
     for i in range(len(L_fit)):
         genomes[i][1].fitness=L_fit[i]
@@ -569,21 +604,23 @@ def eval_genomes(genomes, config):
     outfile.close()
 
 def eval_genomes_genome(genomes, config):
-    global gen
+    global gen, init
     if gen<max_gen:
         gen+=1
     L_coords=[]
     L_speeds=[]
     L_fit=[]
-    init=True
+    init_gen=True
     for genome_id, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         fitness,coords,speeds=run_client_genome(GenomeClient(net,60+10*gen),server_name) #1/6 de sec en plus par génération
-        save_replay(gen,genome_id,0.5,init)
+        save_replay(gen,genome_id,0.2,init,init_gen)
+        init_gen=False
         init=False
         L_fit.append(fitness)
         L_coords.append(coords)
         L_speeds.append(speeds)
+        time.sleep(1)
 
     for i in range(len(L_fit)):
         genomes[i][1].fitness=L_fit[i]
@@ -616,7 +653,7 @@ def run(config_file, checkpoint=None):
 
     # Run for up to global no generations.
     
-    winner = p.run(eval_genomes_genome, no_generations)
+    winner = p.run(eval_genomes, no_generations)
     #winner = p.run(eval_genomes, no_generations)
 
     # Display the winning genome.
