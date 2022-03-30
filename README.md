@@ -1,3 +1,7 @@
+#This project comes from the work done by https://github.com/AndrejGobeX/TrackMania_AI
+
+I modified this project to train a RL AI in TrackMania Nations Forever
+
 # TrackMania_AI
 Neural network driver for Trackmania
 ## Intro and goals
