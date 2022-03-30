@@ -1,6 +1,7 @@
-#This project comes from the work done by https://github.com/AndrejGobeX/TrackMania_AI
+# This project comes from the work done by https://github.com/AndrejGobeX/TrackMania_AI
 
-I modified this project to train a RL AI in TrackMania Nations Forever
+I modified this project to train a RL AI in TrackMania Nations Forever using the NEAT algorithm.
+The functions that remains are the screen computing and part of the implementation of the NEAT algorithm.
 
 # TrackMania_AI
 Neural network driver for Trackmania
