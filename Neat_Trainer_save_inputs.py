@@ -49,7 +49,7 @@ kill_time= 3
 kill_speed = 18
 max_time=35
 no_lines = 20 #need to investigate to upscale that
-checkpoint = "neat-checkpoint-319"
+checkpoint = "neat-checkpoint-318"
 gen=319 #current gen
 server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
 
@@ -59,10 +59,11 @@ server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
 
 #Asynchronously captures screens of a window. Provides functions for accessing
 #the captured screen.
+
 class ScreenViewer:
  
     def __init__(self):
-        self.mut = Lock()
+        #self.mut = Lock()
         self.hwnd = None
         self.its = None         #Time stamp of last image 
         self.i0 = None          #i0 is the latest image; 
@@ -71,7 +72,8 @@ class ScreenViewer:
         #Left, Top, Right, and bottom of the screen window
         self.l, self.t, self.r, self.b = 0, 0, 0, 0
         #Border on left and top to remove
-        self.bl, self.bt, self.br, self.bb = 12, 31, 12, 20
+        #self.bl, self.bt, self.br, self.bb = 12, 31, 12, 20
+        self.bl, self.bt, self.br, self.bb = 0, 0, 0, 0
  
     #Gets handle of window to view
     #wname:         Title of window to find
@@ -84,24 +86,6 @@ class ScreenViewer:
         self.l, self.t, self.r, self.b = win32gui.GetWindowRect(self.hwnd)
         return True
          
-    #Get's the latest image of the window
-    def GetScreen(self):
-        while self.i0 is None:      #Screen hasn't been captured yet
-            pass
-        self.mut.acquire()
-        s = self.i0
-        self.mut.release()
-        return s
-         
-    #Get's the latest image of the window along with timestamp
-    def GetScreenWithTime(self):
-        while self.i0 is None:      #Screen hasn't been captured yet
-            pass
-        self.mut.acquire()
-        s = self.i0
-        t = self.its
-        self.mut.release()
-        return s, t
          
     #Gets the screen of the window referenced by self.hwnd
     def GetScreenImg(self):
@@ -135,29 +119,6 @@ class ScreenViewer:
         #Remove 4 pixels from left and right + border
         return im.reshape(bmInfo['bmHeight'], bmInfo['bmWidth'], 4)[:, :, -2::-1]
 
-    #Begins recording images of the screen
-    def Start(self):
-        #if self.hwnd is None:
-        #    return False
-        self.cl = True
-        thrd = Thread(target = self.ScreenUpdateT)
-        thrd.start()
-        return True
-        
-    #Stop the async thread that is capturing images
-    def Stop(self):
-        self.cl = False
-     
-#Thread used to capture images of screen
-    def ScreenUpdateT(self):
-        #Keep updating screen until terminating
-        while self.cl:
-            self.i1 = self.GetScreenImg()
-            self.mut.acquire()
-            self.i0 = self.i1               #Update the latest image in a thread safe way
-            self.its = time.time()
-            self.mut.release()
-
 class GenClient(Client):
     def __init__(self,L_net,max_time,kill_time):
         super(GenClient,self).__init__()
@@ -180,8 +141,8 @@ class GenClient(Client):
         self.ready_max_steps=60
         self.ready_current_steps=0
         self.finished=False
-        #self.sv=ScreenViewer()
-        #self.sv.GetHWND('TrackMania United Forever (TMInterface 1.1.0)')
+        self.sv=ScreenViewer()
+        self.sv.GetHWND('TrackMania United Forever (TMInterface 1.1.0)')
 
     def on_registered(self, iface: TMInterface):
         print(f'Registered to {iface.server_name}')
@@ -222,9 +183,12 @@ class GenClient(Client):
             if self.init_step:
                 self.init_step=False
                 self.current_step+=1
-                #self.img=self.sv.GetScreenImg() #try
-                self.img = ImageGrab.grab()
+                self.img=self.sv.GetScreenImg() #try
+                self.img=Image.fromarray(self.img,"RGB")
+                self.img.save(f"{self.time}".zfill(10)+".png")
+                #self.img = ImageGrab.grab()
                 #Image.new(self.img).save(f"{self.time}".zfill(10)+".png")
+                
                 #self.img = ImageGrab.grab()
                 self.img = mod_shrink_n_measure(self.img, image_width, image_height, no_lines)
                 try:
