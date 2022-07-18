@@ -16,11 +16,6 @@ h=960
 class ScreenViewer:
  
     def __init__(self):
-        self.hwnd = None
-        self.its = None         #Time stamp of last image 
-        self.i0 = None          #i0 is the latest image; 
-        self.i1 = None          #i1 is used as a temporary variable
-        self.cl = False         #Continue looping flag
         #Left, Top, Right, and bottom of the screen window
         self.l, self.t, self.r, self.b = 0, 0, 0, 0
         #Border on left and top to remove
@@ -73,11 +68,117 @@ class ScreenViewer:
         #Remove 12 pixels from bottom + border
         #Remove 4 pixels from left and right + border
         im=im.reshape(bmInfo['bmHeight'], bmInfo['bmWidth'], 4)[:, :, -2::-1]
-        print(time()-a)
-        print(im[0:3][0:3])
-        return Image.fromarray(im,"RGB")
+        #return Image.fromarray(im,"RGB")
+        return im
 
 def draw_rays(n_rays,img): #OK
+    img=img.convert('L')
+    shape=img.size
+    start_point=(int(shape[0]/2),shape[1]-10) #OK
+    plt.plot(start_point[0],start_point[1],color='r',marker='+')
+    L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
+    ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
+    lr=((start_point[0]-1260)**2 + (start_point[1]-0)**2)**0.5
+    tetal=np.arccos(-(start_point[0]-0)/ll)#ok
+    tetar=np.arccos(-(start_point[0]-1260)/lr)#ok
+    L_end_points=[]
+    for teta in L_teta:
+        if teta<=tetar:
+            x=1260
+            if x-start_point[0]!=0:
+                l=abs((x-start_point[0])/np.cos(teta))
+                y=-l*np.sin(teta)+start_point[1]
+            else:
+                y=start_point[1]
+        elif teta>=tetal:
+            x=0
+            if x-start_point[0]!=0:
+                l=abs((x-start_point[0])/np.cos(teta))
+                y=-l*np.sin(teta)+start_point[1]
+            else:
+                y=start_point[1]
+        else:
+            y=0
+            if abs(y-start_point[1])>1:
+                l=abs((y-start_point[1])/np.sin(teta))
+                x=l*np.cos(teta)+start_point[0]
+            else:
+                x=start_point[0]
+        L_end_points.append([x,y])
+    plt.imshow(img)
+    for i in range(len(L_end_points)):
+        x=L_end_points[i][0]
+        y=L_end_points[i][1]
+        teta=L_teta[i]
+        #plt.axline(start_point,slope=np.tan(teta),color='r')
+        plt.plot([start_point[0],x],[start_point[1],y],color='b')
+    plt.show()
+
+def get_end_points(n_rays):
+    shape=(1280,960)
+    start_point=(int(shape[0]/2),shape[1]-10) #OK
+    plt.plot(start_point[0],start_point[1],color='r',marker='+')
+    L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
+    ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
+    lr=((start_point[0]-1260)**2 + (start_point[1]-0)**2)**0.5
+    tetal=np.arccos(-(start_point[0]-0)/ll)#ok
+    tetar=np.arccos(-(start_point[0]-1260)/lr)#ok
+    print(f"tetal={tetal}")
+    print(f"tetar={tetar}")
+    L_end_points=[]
+    for teta in L_teta:
+        if teta<=tetar:
+            x=1280
+            if x-start_point[0]!=0:
+                l=abs((x-start_point[0])/np.cos(teta))
+                y=-l*np.sin(teta)+start_point[1]
+            else:
+                y=start_point[1]
+        elif teta>=tetal:
+            x=0
+            if x-start_point[0]!=0:
+                l=abs((x-start_point[0])/np.cos(teta))
+                y=-l*np.sin(teta)+start_point[1]
+            else:
+                y=start_point[1]
+        else:
+            y=0
+            if abs(y-start_point[1])>1:
+                l=abs((y-start_point[1])/np.sin(teta))
+                x=l*np.cos(teta)+start_point[0]
+            else:
+                x=start_point[0]
+        L_end_points.append([x,y])
+    return start_point,L_end_points
+
+
+#from https://stackoverflow.com/questions/25837544/get-all-points-of-a-straight-line-in-python?fbclid=IwAR2y-tW6Qmk_1I28KQRF2WslyfmXAFhlQ3_2l0tKL8RQ7qAIj-f6QgBE-NM
+def getLine(x1,y1,x2,y2): #seems good
+    if x1==x2: ## Perfectly horizontal line, can be solved easily
+        return [[int(x1),int(i)] for i in range(y1,y2,int(abs(y2-y1)/(y2-y1)))]
+    else: ## More of a problem, ratios can be used instead
+        x_inv=False
+        if x1>x2: ## If the line goes "backwards", flip the positions, to go "forwards" down it.
+            x=x1
+            x1=x2
+            x2=x
+            y=y1
+            y1=y2
+            y2=y
+            x_inv=True
+        slope=(y2-y1)/(x2-x1) ## Calculate the slope of the line
+        line=[]
+        i=0
+        while x1+i < x2: ## Keep iterating until the end of the line is reached
+            i+=1
+            x_end=x1+i
+            y_end=y1+slope*i
+            line.append([int(x_end),int(y_end)]) ## Add the next point on the line
+        if x_inv:
+            line.reverse()
+        return line ## Finally, return the line!
+
+def draw_pixel_lines(n_rays,img): #OK
     img=img.convert('L')
     shape=img.size
     start_point=(int(shape[0]/2),shape[1]-10) #OK
@@ -114,44 +215,55 @@ def draw_rays(n_rays,img): #OK
                 x=start_point[0]
         L_end_points.append([x,y])
     plt.imshow(img)
+
     for i in range(len(L_end_points)):
-        x=L_end_points[i][0]
-        y=L_end_points[i][1]
-        teta=L_teta[i]
-        print(f"x={x}")
-        print(f"y={y}")
-        #plt.axline(start_point,slope=np.tan(teta),color='r')
-        plt.plot([start_point[0],x],[start_point[1],y],color='b')
+        x=int(L_end_points[i][0])
+        y=int(L_end_points[i][1])
+
+        L_pixels=getLine(int(start_point[0]),int(start_point[1]),x,y)
+        for j in range(len(L_pixels)-1):
+            plt.plot([L_pixels[j][0],L_pixels[j+1][0]],[L_pixels[j][1],L_pixels[j+1][1]],color='r',marker='+')
     plt.show()
 
-#from https://stackoverflow.com/questions/25837544/get-all-points-of-a-straight-line-in-python?fbclid=IwAR2y-tW6Qmk_1I28KQRF2WslyfmXAFhlQ3_2l0tKL8RQ7qAIj-f6QgBE-NM
-def getLine(x1,y1,x2,y2):
-    if x1==x2: ## Perfectly horizontal line, can be solved easily
-        return [(x1,i) for i in range(y1,y2,int(abs(y2-y1)/(y2-y1)))]
-    else: ## More of a problem, ratios can be used instead
-        if x1>x2: ## If the line goes "backwards", flip the positions, to go "forwards" down it.
-            x=x1
-            x1=x2
-            x2=x
-            y=y1
-            y1=y2
-            y2=y
-        slope=(y2-y1)/(x2-x1) ## Calculate the slope of the line
-        line=[]
-        i=0
-        while x1+i < x2: ## Keep iterating until the end of the line is reached
-            i+=1
-            line.append((x1+i,y1+slope*i)) ## Add the next point on the line
-        return line ## Finally, return the line!
+def intersect(im,line):
+    for i in range(len(line)):
+        pix=line[i]
+        if pix[0]<len(im) and pix[1]<len(im[0]):
+            color=sum(im[pix[0]][pix[1]])/len(im[pix[0]][pix[1]])
+            print(im[pix[0]][pix[1]])
+            print(color)
+            if color<20:
+                return i
+    return len(line)
 
-#def intersect(img,line):
-#    for pix in line:
-#        if pix of img is dark:
-#            return pix id
-#    return len(line)
-
+def test_intersect(n_lines,im):
+    c,L_end_points=get_end_points(n_lines)
+    L_pix_lines=[]
+    for i in range(len(L_end_points)):
+        L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+    L_intersect=[]
+    for i in range(len(L_pix_lines)):
+        L_intersect.append(intersect(im,L_pix_lines[i]))
+    img=Image.fromarray(im,"RGB")
+    plt.imshow(img)
+    for i in range(len(L_end_points)):
+        plt.plot([c[0],L_end_points[i][0]],[c[1],L_end_points[i][1]],color='r')
+    for i in range(len(L_pix_lines)):
+        line=L_pix_lines[i]
+        inter=L_intersect[i]
+        if inter==len(line):
+            plt.plot(L_end_points[i][0],L_end_points[i][1],color='g',marker='+')
+        else:
+            plt.plot(line[inter][0],line[inter][1],color='g',marker='+',markersize=10)
+    plt.show()
+    #function to display the intesecting points and the lines
+    #to ensure it is working as it is meant to
+    pass
 
 if __name__=="__main__":
+    
+    #issue following the pixel lines, lists are not in the right order
+    #need to debug intersect
 
     sv=ScreenViewer()
     sv.GetHWND('TrackMania United Forever (TMInterface 1.1.0)')
@@ -161,11 +273,18 @@ if __name__=="__main__":
     for i in range(1):
         n_img+=1
         a=time()
-        img=sv.GetScreenImg() #try
+        im=sv.GetScreenImg() #try
+        img=Image.fromarray(im,"RGB")
         t=time()-a
         img.save(f"{n_img}".zfill(10)+".png")
-        draw_rays(10,img)
+        #draw_rays(10,img)
+        test_intersect(10,im)
+        #draw_pixel_lines(10,img)
         print(t)
+    print(im[0])
+
+
+    
 
 #issue wwith h and w, got 1038 instead of 1280 and 806 instead of 960
 #choice made to fi"the dimention of the window
