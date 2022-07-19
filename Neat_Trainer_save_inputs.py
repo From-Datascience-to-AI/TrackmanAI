@@ -142,7 +142,7 @@ class GenClient(Client):
         self.ready_current_steps=0
         self.finished=False
         self.sv=ScreenViewer()
-        self.sv.GetHWND('TrackMania United Forever (TMInterface 1.1.0)')
+        self.sv.GetHWND('TrackMania United Forever (TMInterface 1.2.0)')
 
     def on_registered(self, iface: TMInterface):
         print(f'Registered to {iface.server_name}')

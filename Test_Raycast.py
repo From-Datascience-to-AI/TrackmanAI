@@ -266,7 +266,7 @@ if __name__=="__main__":
     #need to debug intersect
 
     sv=ScreenViewer()
-    sv.GetHWND('TrackMania United Forever (TMInterface 1.1.0)')
+    sv.GetHWND('TrackMania United Forever (TMInterface 1.2.0)')
     n_img=0
     print('Press z to begin.')
     keyboard.wait('z')
