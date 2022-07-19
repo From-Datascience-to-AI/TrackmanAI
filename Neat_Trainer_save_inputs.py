@@ -183,10 +183,10 @@ class GenClient(Client):
             if self.init_step:
                 self.init_step=False
                 self.current_step+=1
-                self.img=self.sv.GetScreenImg() #try
-                self.img=Image.fromarray(self.img,"RGB")
-                self.img.save(f"{self.time}".zfill(10)+".png")
-                #self.img = ImageGrab.grab()
+                #self.img=self.sv.GetScreenImg() #try
+                #self.img=Image.fromarray(self.img,"RGB")
+                #self.img.save(f"{self.time}".zfill(10)+".png")
+                self.img = ImageGrab.grab()
                 #Image.new(self.img).save(f"{self.time}".zfill(10)+".png")
                 
                 #self.img = ImageGrab.grab()
