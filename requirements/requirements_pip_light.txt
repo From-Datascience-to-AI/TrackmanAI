@@ -1,0 +1,6 @@
+tminterface==0.4
+Pillow==8.4.0
+keyboard==0.13.5
+neat-python==0.92
+opencv-python==4.5.5.64
+pywin32==302
