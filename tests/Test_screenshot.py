@@ -78,7 +78,7 @@ class ScreenViewer:
 
 if __name__=="__main__":
     sv=ScreenViewer()
-    sv.GetHWND('TrackMania United Forever (TMInterface 1.2.0)')
+    sv.GetHWND('TrackMania Nations Forever (TMInterface 1.2.0)')
     n_img=0
     print('Press z to begin.')
     keyboard.wait('z')
