@@ -14,7 +14,7 @@ import os
 import cv2
 import pickle as pickle
 
-os.environ["PATH"] = r"d:D:\ProgramData\Anaconda3\envs\trackmanAIenv\Lib\site-packagespywin32_system32;" + os.environ["PATH"]
+#os.environ["PATH"] = r"d:D:\ProgramData\Anaconda3\envs\trackmanAIenv\Lib\site-packagespywin32_system32;" + os.environ["PATH"]
 
 import win32gui
 import win32con
@@ -51,8 +51,9 @@ kill_time= 3
 kill_speed = 10
 max_time=35
 no_lines = 20 #need to investigate to upscale that
-checkpoint = "neat-checkpoint-37"#None 
-gen=37 #current gen
+filename_prefix = "models/NEAT/mlruns/training_steer_gas/"
+checkpoint = None # filename_prefix + "neat-checkpoint-0"
+gen=319 #current gen
 server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
 
 
@@ -507,7 +508,7 @@ def run(config_file, checkpoint=None):
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(5))
+    p.add_reporter(neat.Checkpointer(generation_interval=1, filename_prefix=filename_prefix))
 
     # Run for up to global no generations.
     
@@ -536,7 +537,7 @@ def run(config_file, checkpoint=None):
 def main():
 
     local_dir = os.getcwd()
-    config_path = os.path.join(local_dir, 'NEAT/config-feedforward')
+    config_path = os.path.join(local_dir, 'models/NEAT/config-feedforward')
     print('Press z to begin.')
     keyboard.wait('z')
 
