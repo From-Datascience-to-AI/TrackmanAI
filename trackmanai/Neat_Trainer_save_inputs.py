@@ -51,7 +51,7 @@ kill_time= 3
 kill_speed = 10
 max_time=35
 no_lines = 20 #need to investigate to upscale that
-filename_prefix = "models/NEAT/mlruns/training_steer_gas/"
+filename_prefix = "models/NEAT/Checkpoints"
 checkpoint = None # filename_prefix + "neat-checkpoint-0"
 gen=319 #current gen
 server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
@@ -77,7 +77,7 @@ class ScreenViewer:
         #Border on left and top to remove
         #self.bl, self.bt, self.br, self.bb = 12, 31, 12, 20
         self.bl, self.bt, self.br, self.bb = 0, 0, 0, 0
- 
+        self.L_pix_lines=Get_pix_lines(n_lines)
     #Gets handle of window to view
     #wname:         Title of window to find
     #Return:        True on success; False on failure
@@ -204,16 +204,20 @@ def intersect(im,line):
             print(pix)
     return len(line)
 
-def Get_Raycast(im,n_lines):
-    c,L_end_points=get_end_points(n_lines)
-    L_pix_lines=[]
-    for i in range(len(L_end_points)):
-        L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+def Get_Raycast(im,L_pix_lines):
     L_intersect_normed=[]
     for i in range(len(L_pix_lines)):
         inter=intersect(im,L_pix_lines[i])
         L_intersect_normed.append(inter/len(L_pix_lines[i]))
     return L_intersect_normed
+
+def Get_pix_lines(n_lines):
+    c,L_end_points=get_end_points(n_lines)
+    L_pix_lines=[]
+    for i in range(len(L_end_points)):
+        L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+    return L_pix_lines
+
 
 class GenClient(Client):
     def __init__(self,L_net,max_time,kill_time):
@@ -284,9 +288,9 @@ class GenClient(Client):
                 #self.img.save(f"{self.time}".zfill(10)+".png")
                 #self.img = ImageGrab.grab()
                 #Image.new(self.img).save(f"{self.time}".zfill(10)+".png")
-                
+                self.L_pix_lines=self.sv.L_pix_lines
                 #self.img = ImageGrab.grab()
-                self.L_raycast = Get_Raycast(self.im,n_lines)
+                self.L_raycast = Get_Raycast(self.im,self.L_pix_lines)
                 self.inputs=self.L_raycast
                 self.inputs.append(speed)
                 self.inputs.append(self.yaw)
@@ -305,7 +309,8 @@ class GenClient(Client):
                 if self.current_step%self.skip_frames==0:
                     self.im=self.sv.GetScreenImg()
                     #self.img.save("test.png") #to work on the frame processing
-                    self.L_raycast = Get_Raycast(self.im,n_lines)
+                    self.L_pix_lines=self.sv.L_pix_lines
+                    self.L_raycast = Get_Raycast(self.im,self.L_pix_lines)
                     self.inputs=self.L_raycast
                     self.inputs.append(speed)
                     self.inputs.append(self.yaw)
@@ -466,17 +471,17 @@ def eval_genomes(genomes, config):
     for i in range(len(L_fit)):
         genomes[i][1].fitness=L_fit[i]
 
-    filename = 'NEAT/Coords/'+str(gen).zfill(5)+'.pickle'
+    filename = 'models/NEAT/Coords/'+str(gen).zfill(5)+'.pickle'
     outfile = open(filename,'wb')
     pickle.dump(L_coords,outfile)
     outfile.close()
-    filename = 'NEAT/Speeds/'+str(gen).zfill(5)+'.pickle'
+    filename = 'models/NEAT/Speeds/'+str(gen).zfill(5)+'.pickle'
     outfile = open(filename,'wb')
     pickle.dump(L_speeds,outfile)
     outfile.close()
 
     for i in range(len(L_inputs)):
-        filename="NEAT/Inputs/"+str(gen).zfill(5)+'_'+str(i).zfill(3)
+        filename="models/NEAT/Inputs/"+str(gen).zfill(5)+'_'+str(i).zfill(3)
         l_inputs=L_inputs[i]
         outfile = open(filename,'a')
         for j in range(len(l_inputs)):
