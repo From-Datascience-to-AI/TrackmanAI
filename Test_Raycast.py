@@ -56,7 +56,7 @@ class ScreenViewer:
         #Third tuple is the start position in source
         #cDC.BitBlt((0,0), (w, h), dcObj, (self.bl, self.bt), win32con.SRCCOPY)
         cDC.BitBlt((0,0), (w, h), dcObj, (0, 38), win32con.SRCCOPY)
-        dataBitMap.SaveBitmapFile(cDC, 'debug.bmp')
+        #dataBitMap.SaveBitmapFile(cDC, 'debug.bmp')
         bmInfo = dataBitMap.GetInfo()
         im = np.frombuffer(dataBitMap.GetBitmapBits(True), dtype = np.uint8)
         dcObj.DeleteDC()
@@ -119,14 +119,11 @@ def draw_rays(n_rays,img): #OK
 def get_end_points(n_rays):
     shape=(1279,959)
     start_point=(int(shape[0]/2),shape[1]-60) #OK
-    plt.plot(start_point[0],start_point[1],color='r',marker='+')
     L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
     ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
     lr=((start_point[0]-1279)**2 + (start_point[1]-0)**2)**0.5
     tetal=np.arccos(-(start_point[0]-0)/ll)#ok
     tetar=np.arccos(-(start_point[0]-1279)/lr)#ok
-    print(f"tetal={tetal}")
-    print(f"tetar={tetar}")
     L_end_points=[]
     for teta in L_teta:
         if teta<=tetar:
@@ -289,7 +286,24 @@ def test_intersect(n_lines,im):
 
 
 def Get_Raycast(im,n_lines):
-    pass
+    print("a")
+    a=time()
+    c,L_end_points=get_end_points(n_lines) 
+    print(time()-a)#0.0
+    print("b")
+    b=time()
+    L_pix_lines=[]
+    for i in range(len(L_end_points)):
+        L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+    print(time()-b)#0.015
+    print("c")
+    c=time()
+    L_intersect_normed=[]
+    for i in range(len(L_pix_lines)):
+        inter=intersect(im,L_pix_lines[i])
+        L_intersect_normed.append(inter/len(L_pix_lines[i]))
+    print(time()-c)#0.02
+    return L_intersect_normed
 
 
 
@@ -301,20 +315,20 @@ if __name__=="__main__":
     sv=ScreenViewer()
     sv.GetHWND('TrackMania United Forever (TMInterface 1.2.0)')
     n_img=0
+    n_lines=20
     print('Press z to begin.')
     keyboard.wait('z')
-    for i in range(1):
+    for i in range(10):
         n_img+=1
         a=time()
         im=sv.GetScreenImg() #try
-        img=Image.fromarray(im,"RGB")
+        L_raycast = Get_Raycast(im,n_lines)
         t=time()-a
-        img.save(f"{n_img}".zfill(10)+".png")
+        #img.save(f"{n_img}".zfill(10)+".png")
         #draw_rays(10,img)
-        test_intersect(10,im)
+        test_intersect(20,im)
         #draw_pixel_lines(10,img)
         print(t)
-    print(im[0])
 
 
     
