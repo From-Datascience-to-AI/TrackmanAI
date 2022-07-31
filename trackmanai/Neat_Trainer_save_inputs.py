@@ -1,4 +1,5 @@
 
+from encodings import normalize_encoding
 from tminterface.client import Client
 from tminterface.interface import TMInterface
 from tminterface.constants import DEFAULT_SERVER_SIZE
@@ -36,9 +37,10 @@ if len(sys.argv) < 0:
     exit()
 
 # image dimensions
-image_width = 100
-image_height = 100
+w=1280
+h=960
 
+n_lines=20
 # hyperparams
 #threshold = 0.5
 no_generations = 1000 #20 for straight with 8sec of max
@@ -46,7 +48,7 @@ no_generations = 1000 #20 for straight with 8sec of max
 gamespeed=1
 skip_frames=5
 kill_time= 3
-kill_speed = 18
+kill_speed = 10
 max_time=35
 no_lines = 20 #need to investigate to upscale that
 filename_prefix = "models/NEAT/mlruns/training_steer_gas/"
@@ -92,13 +94,13 @@ class ScreenViewer:
     def GetScreenImg(self):
         if self.hwnd is None:
             raise Exception("HWND is none. HWND not called or invalid window name provided.")
-        self.l, self.t, self.r, self.b = win32gui.GetWindowRect(self.hwnd)
         #Remove border around window (8 pixels on each side)
         #Remove 4 extra pixels from left and right 16 + 8 = 24
-        w = self.r - self.l - self.br - self.bl
+        #w = self.r - self.l  #- self.br - self.bl
         #Remove border on top and bottom (31 on top 8 on bottom)
         #Remove 12 extra pixels from bottom 39 + 12 = 51
-        h = self.b - self.t - self.bt - self.bb
+        #h = self.b - self.t #- self.bt - self.bb
+        #h=int(h*1.25)
         wDC = win32gui.GetWindowDC(self.hwnd)
         dcObj = win32ui.CreateDCFromHandle(wDC)
         cDC = dcObj.CreateCompatibleDC()
@@ -107,7 +109,9 @@ class ScreenViewer:
         cDC.SelectObject(dataBitMap)
         #First 2 tuples are top-left and bottom-right of destination
         #Third tuple is the start position in source
-        cDC.BitBlt((0,0), (w, h), dcObj, (self.bl, self.bt), win32con.SRCCOPY)
+        #cDC.BitBlt((0,0), (w, h), dcObj, (self.bl, self.bt), win32con.SRCCOPY)
+        cDC.BitBlt((0,0), (w, h), dcObj, (0, 38), win32con.SRCCOPY)
+        #dataBitMap.SaveBitmapFile(cDC, 'debug.bmp')
         bmInfo = dataBitMap.GetInfo()
         im = np.frombuffer(dataBitMap.GetBitmapBits(True), dtype = np.uint8)
         dcObj.DeleteDC()
@@ -118,7 +122,98 @@ class ScreenViewer:
         #For 800x600 images:
         #Remove 12 pixels from bottom + border
         #Remove 4 pixels from left and right + border
-        return im.reshape(bmInfo['bmHeight'], bmInfo['bmWidth'], 4)[:, :, -2::-1]
+        im=im.reshape(bmInfo['bmHeight'], bmInfo['bmWidth'], 4)[:, :, -2::-1]
+        #return Image.fromarray(im,"RGB")
+        return im
+
+
+
+def get_end_points(n_rays):
+    shape=(1279,959)
+    start_point=(int(shape[0]/2),shape[1]-60) #OK
+    L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
+    ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
+    lr=((start_point[0]-1279)**2 + (start_point[1]-0)**2)**0.5
+    tetal=np.arccos(-(start_point[0]-0)/ll)#ok
+    tetar=np.arccos(-(start_point[0]-1279)/lr)#ok
+    L_end_points=[]
+    for teta in L_teta:
+        if teta<=tetar:
+            x=1279
+            if x-start_point[0]!=0:
+                l=abs((x-start_point[0])/np.cos(teta))
+                y=-l*np.sin(teta)+start_point[1]
+            else:
+                y=start_point[1]
+        elif teta>=tetal:
+            x=0
+            if x-start_point[0]!=0:
+                l=abs((x-start_point[0])/np.cos(teta))
+                y=-l*np.sin(teta)+start_point[1]
+            else:
+                y=start_point[1]
+        else:
+            y=0
+            if abs(y-start_point[1])>1:
+                l=abs((y-start_point[1])/np.sin(teta))
+                x=l*np.cos(teta)+start_point[0]
+            else:
+                x=start_point[0]
+        L_end_points.append([x,y])
+    return start_point,L_end_points
+
+#based from https://stackoverflow.com/questions/25837544/get-all-points-of-a-straight-line-in-python?fbclid=IwAR2y-tW6Qmk_1I28KQRF2WslyfmXAFhlQ3_2l0tKL8RQ7qAIj-f6QgBE-NM
+def getLine(x1,y1,x2,y2): #seems good
+    if x1==x2: ## Perfectly horizontal line, can be solved easily
+        return [[int(x1),int(i)] for i in range(y1,y2,int(abs(y2-y1)/(y2-y1)))]
+    else: ## More of a problem, ratios can be used instead
+        x_inv=False
+        if x1>x2: ## If the line goes "backwards", flip the positions, to go "forwards" down it.
+            x=x1
+            x1=x2
+            x2=x
+            y=y1
+            y1=y2
+            y2=y
+            x_inv=True
+        slope=(y2-y1)/(x2-x1) ## Calculate the slope of the line
+        line=[]
+        i=0
+        while x1+i < x2: ## Keep iterating until the end of the line is reached
+            i+=1
+            x_end=x1+i
+            y_end=y1+slope*i
+            line.append([int(x_end),int(y_end)]) ## Add the next point on the line
+        if x_inv:
+            line.reverse()
+        return line ## Finally, return the line!
+
+def intersect(im,line):
+    for i in range(len(line)):
+        pix=line[i]
+        shape=im.shape
+        #print(shape)
+        if pix[0]<shape[1] and pix[1]<shape[0]:
+            color=sum(im[pix[1]][pix[0]])/len(im[pix[1]][pix[0]])
+            #print(im[pix[0]][pix[1]])
+            #print(color)
+            if color<40:
+                return i
+        else:
+            print(shape)
+            print(pix)
+    return len(line)
+
+def Get_Raycast(im,n_lines):
+    c,L_end_points=get_end_points(n_lines)
+    L_pix_lines=[]
+    for i in range(len(L_end_points)):
+        L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+    L_intersect_normed=[]
+    for i in range(len(L_pix_lines)):
+        inter=intersect(im,L_pix_lines[i])
+        L_intersect_normed.append(inter/len(L_pix_lines[i]))
+    return L_intersect_normed
 
 class GenClient(Client):
     def __init__(self,L_net,max_time,kill_time):
@@ -184,24 +279,21 @@ class GenClient(Client):
             if self.init_step:
                 self.init_step=False
                 self.current_step+=1
-                #self.img=self.sv.GetScreenImg() #try
+                self.im=self.sv.GetScreenImg() #try
                 #self.img=Image.fromarray(self.img,"RGB")
                 #self.img.save(f"{self.time}".zfill(10)+".png")
-                self.img = ImageGrab.grab()
+                #self.img = ImageGrab.grab()
                 #Image.new(self.img).save(f"{self.time}".zfill(10)+".png")
                 
                 #self.img = ImageGrab.grab()
-                self.img = mod_shrink_n_measure(self.img, image_width, image_height, no_lines)
-                try:
-                    self.img = self.img / 255.0
-                except:
-                    self.img = self.img
-                self.img.append(speed)
-                self.img.append(self.yaw)
-                self.img.append(self.pitch)
-                self.img.append(self.roll)
+                self.L_raycast = Get_Raycast(self.im,n_lines)
+                self.inputs=self.L_raycast
+                self.inputs.append(speed)
+                self.inputs.append(self.yaw)
+                self.inputs.append(self.pitch)
+                self.inputs.append(self.roll)
                 #iface.log(str(self.img[:-4]))
-                output = np.array(self.net.activate(self.img))
+                output = np.array(self.net.activate(self.inputs))
                 #inputs
                 self.accelerate=output[1]>0
                 self.brake= output[2]>0
@@ -211,19 +303,16 @@ class GenClient(Client):
             else:
                 #one screenshot every skip_frame frames
                 if self.current_step%self.skip_frames==0:
-                    self.img = ImageGrab.grab()
+                    self.im=self.sv.GetScreenImg()
                     #self.img.save("test.png") #to work on the frame processing
-                    self.img = mod_shrink_n_measure(self.img, image_width, image_height, no_lines)
-                    #Image.fromarray(np.array(self.img)).save("test2.png")
-                    try:
-                        self.img = self.img / 255.0
-                    except:
-                        self.img = self.img
-                    self.img.append(speed)
-                    self.img.append(self.yaw)
-                    self.img.append(self.pitch)
-                    self.img.append(self.roll)
-                    output = np.array(self.net.activate(self.img))
+                    self.L_raycast = Get_Raycast(self.im,n_lines)
+                    self.inputs=self.L_raycast
+                    self.inputs.append(speed)
+                    self.inputs.append(self.yaw)
+                    self.inputs.append(self.pitch)
+                    self.inputs.append(self.roll)
+                    #iface.log(str(self.img[:-4]))
+                    output = np.array(self.net.activate(self.inputs))
                     #inputs
                     self.accelerate=output[1]>0
                     self.brake= output[2]>0
@@ -362,67 +451,6 @@ def run_client_gen(client: Client, server_name: str = 'TMInterface0', buffer_siz
     iface.close()
 
     return client.L_fit,client.L_coords,client.L_speeds,client.L_inputs
-
-
-def initial_crop(img, l, u, r, d):
-    img = img.crop((l, u, img.size[0]-r, img.size[1]-d))
-    return img
-
-def mod_edge(img, w, h):
-    img = initial_crop(img, 0, img.size[1]//2, 0, img.size[1]//3)
-    img = ImageEnhance.Contrast(img).enhance(2).convert('L')  # .filter(ImageFilter.EDGE_ENHANCE_MORE)
-    img = img.resize((w, h), Image.ANTIALIAS)
-    img = np.array(img)
-    img = cv2.medianBlur(img, 5)
-    img = (img < 50) * np.uint8(255)
-    return img.reshape((h, w, 1))
-
-
-def mod_shrink_n_measure(img, w, h, no_lines):
-    img_np = mod_edge(img, w, h)
-    return find_walls(img_np, no_lines=no_lines)
-
-
-def find_walls(img_np, no_lines=10, threshold=200):
-    h, w, d = img_np.shape
-    dx = w//no_lines
-
-    end_points = []
-
-    start_points = range(dx//2, w, dx)
-    for start_point in start_points:
-        distance = h - 1
-        while distance >= 0:
-            if img_np[distance][start_point] >= threshold:  # pixel threshold
-                break
-            distance -= 1
-        distance = h - distance - 1
-        end_points.append(distance * 1.0 / h)
-    #print(end_points)
-    return end_points
-
-
-def run_inference(img_np, end_points):
-    no_lines = len(end_points)
-    h, w, d = img_np.shape
-    dx = w//no_lines
-
-    if d == 1:
-        img_np = np.stack((img_np,)*3, axis=-1).reshape(h, w, 3)
-
-    start_points = range(dx//2, w, dx)
-    for start_point, end_point in zip(start_points, end_points):
-        distance = end_point * h
-        while distance > 0:
-            i = int(h - distance)
-            if i >= h:
-                i = h - 1
-            img_np[i][start_point][0] = 0
-            img_np[i][start_point][1] = 255
-            img_np[i][start_point][2] = 255
-            distance -= 1
-    
-    return img_np
 
 
 def eval_genomes(genomes, config):

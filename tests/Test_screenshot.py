@@ -1,11 +1,14 @@
+from calendar import c
+from turtle import title
 import win32gui
 import win32con
 import win32ui
 from threading import Thread, Lock
-from PIL import Image
+from PIL import ImageGrab, ImageEnhance, Image
 from time import time
 import keyboard
 import numpy as np
+import dxcam
 
 #goal of this script: testing the screenshot part and mesuring the time taken
 
@@ -72,24 +75,70 @@ class ScreenViewer:
         #Remove 12 pixels from bottom + border
         #Remove 4 pixels from left and right + border
         im=im.reshape(bmInfo['bmHeight'], bmInfo['bmWidth'], 4)[:, :, -2::-1]
-        print(time()-a)
-        print(im[0:3][0:3])
-        return Image.fromarray(im,"RGB")
+        t=time()-a
+        #print(im[0:3][0:3])
+        return t,Image.fromarray(im,"RGB")
+
+def GetTMShape():
+    hwnd = win32gui.FindWindow(None, "TrackMania United Forever (TMInterface 1.2.0)")
+    if hwnd == 0:
+        hwnd = None
+        return False
+    l, t, r, b = win32gui.GetWindowRect(hwnd)
+    return (l,t,r,b)
 
 if __name__=="__main__":
     sv=ScreenViewer()
-    sv.GetHWND('TrackMania Nations Forever (TMInterface 1.2.0)')
+    sv.GetHWND('TrackMania United Forever (TMInterface 1.2.0)')
+    camera=dxcam.create()
+    region=GetTMShape()
     n_img=0
     print('Press z to begin.')
     keyboard.wait('z')
+    L_t=[]
+    L_t2=[]
+    L_t3=[]
+    L_t4=[]
     for i in range(10):
         n_img+=1
+
         a=time()
-        img=sv.GetScreenImg() #try
-        t=time()-a
-        img.save(f"{n_img}".zfill(10)+".png")
-        print(t)
+        t,img=sv.GetScreenImg() #try
+        t2=time()-a
+        img.save(f"GetScreenIMG_{n_img}".zfill(10)+".png")
+
+        a=time()
+        img2=ImageGrab.grab()
+        t3=time()-a
+        img2.save(f"Image_grab_{n_img}".zfill(10)+".png")
+
+        a=time()
+        im=camera.grab(region=region)
+        t4=time()-a
+        img3=Image.fromarray(im,"RGB")
+        img3.save(f"camera_grab_{n_img}".zfill(10)+".png")
+        L_t.append(t)
+        L_t2.append(t2)
+        L_t3.append(t3)
+        L_t4.append(t4)
+    print(f"{sum(L_t)/len(L_t)} seconds for wingui screenshot without Image conversion")
+    print(f"{sum(L_t2)/len(L_t2)} seconds for wingui screenshot with Image conversion")
+    print(f"{sum(L_t3)/len(L_t3)} seconds for Imagegrab screenshot")
+    print(f"{sum(L_t4)/len(L_t4)} seconds for dxcam screenshot")
+    print(f"{1/(sum(L_t)/len(L_t))} screenshots per second for wingui screenshot without Image conversion")
+    print(f"{1/(sum(L_t2)/len(L_t2))} screenshots per second for wingui screenshot with Image conversion")
+    print(f"{1/(sum(L_t3)/len(L_t3))} screenshots per second for for Imagegrab screenshot")
+    print(f"{1/(sum(L_t4)/len(L_t4))} screenshots per second for for dxcam screenshot")
+    del camera
+    #paralel processing dxcam:
 
 #issue wwith h and w, got 1038 instead of 1280 and 806 instead of 960
 #choice made to fi"the dimention of the window
 #most of the time taken is to convert the array to image
+
+#todo add mss screenshot
+#todo add D3DShot
+
+
+#todo project: use the values of pixels in high contrast to try to highlight the road or to feed it in the NN
+#idea: use algorithm of movement between two successives pictures to get an Idea of the real pixel movement and use it to feed the NN

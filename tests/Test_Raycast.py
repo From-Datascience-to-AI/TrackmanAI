@@ -56,7 +56,7 @@ class ScreenViewer:
         #Third tuple is the start position in source
         #cDC.BitBlt((0,0), (w, h), dcObj, (self.bl, self.bt), win32con.SRCCOPY)
         cDC.BitBlt((0,0), (w, h), dcObj, (0, 38), win32con.SRCCOPY)
-        dataBitMap.SaveBitmapFile(cDC, 'debug.bmp')
+        #dataBitMap.SaveBitmapFile(cDC, 'debug.bmp')
         bmInfo = dataBitMap.GetInfo()
         im = np.frombuffer(dataBitMap.GetBitmapBits(True), dtype = np.uint8)
         dcObj.DeleteDC()
@@ -74,17 +74,19 @@ class ScreenViewer:
 def draw_rays(n_rays,img): #OK
     img=img.convert('L')
     shape=img.size
+    shape[0]-=1
+    shape[1]-=1
     start_point=(int(shape[0]/2),shape[1]-10) #OK
     plt.plot(start_point[0],start_point[1],color='r',marker='+')
     L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
     ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
-    lr=((start_point[0]-1260)**2 + (start_point[1]-0)**2)**0.5
+    lr=((start_point[0]-1279)**2 + (start_point[1]-0)**2)**0.5
     tetal=np.arccos(-(start_point[0]-0)/ll)#ok
-    tetar=np.arccos(-(start_point[0]-1260)/lr)#ok
+    tetar=np.arccos(-(start_point[0]-1279)/lr)#ok
     L_end_points=[]
     for teta in L_teta:
         if teta<=tetar:
-            x=1260
+            x=1279
             if x-start_point[0]!=0:
                 l=abs((x-start_point[0])/np.cos(teta))
                 y=-l*np.sin(teta)+start_point[1]
@@ -115,20 +117,17 @@ def draw_rays(n_rays,img): #OK
     plt.show()
 
 def get_end_points(n_rays):
-    shape=(1280,960)
-    start_point=(int(shape[0]/2),shape[1]-10) #OK
-    plt.plot(start_point[0],start_point[1],color='r',marker='+')
+    shape=(1279,959)
+    start_point=(int(shape[0]/2),shape[1]-60) #OK
     L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
     ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
-    lr=((start_point[0]-1260)**2 + (start_point[1]-0)**2)**0.5
+    lr=((start_point[0]-1279)**2 + (start_point[1]-0)**2)**0.5
     tetal=np.arccos(-(start_point[0]-0)/ll)#ok
-    tetar=np.arccos(-(start_point[0]-1260)/lr)#ok
-    print(f"tetal={tetal}")
-    print(f"tetar={tetar}")
+    tetar=np.arccos(-(start_point[0]-1279)/lr)#ok
     L_end_points=[]
     for teta in L_teta:
         if teta<=tetar:
-            x=1280
+            x=1279
             if x-start_point[0]!=0:
                 l=abs((x-start_point[0])/np.cos(teta))
                 y=-l*np.sin(teta)+start_point[1]
@@ -181,19 +180,21 @@ def getLine(x1,y1,x2,y2): #seems good
 def draw_pixel_lines(n_rays,img): #OK
     img=img.convert('L')
     shape=img.size
+    shape[0]-=1
+    shape[1]-=1
     start_point=(int(shape[0]/2),shape[1]-10) #OK
     plt.plot(start_point[0],start_point[1],color='r',marker='+')
     L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
     ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
-    lr=((start_point[0]-1260)**2 + (start_point[1]-0)**2)**0.5
+    lr=((start_point[0]-1279)**2 + (start_point[1]-0)**2)**0.5
     tetal=np.arccos(-(start_point[0]-0)/ll)#ok
-    tetar=np.arccos(-(start_point[0]-1260)/lr)#ok
+    tetar=np.arccos(-(start_point[0]-1279)/lr)#ok
     print(f"tetal={tetal}")
     print(f"tetar={tetar}")
     L_end_points=[]
     for teta in L_teta:
         if teta<=tetar:
-            x=1260
+            x=1279
             if x-start_point[0]!=0:
                 l=abs((x-start_point[0])/np.cos(teta))
                 y=-l*np.sin(teta)+start_point[1]
@@ -228,12 +229,17 @@ def draw_pixel_lines(n_rays,img): #OK
 def intersect(im,line):
     for i in range(len(line)):
         pix=line[i]
-        if pix[0]<len(im) and pix[1]<len(im[0]):
-            color=sum(im[pix[0]][pix[1]])/len(im[pix[0]][pix[1]])
-            print(im[pix[0]][pix[1]])
-            print(color)
-            if color<20:
+        shape=im.shape
+        #print(shape)
+        if pix[0]<shape[1] and pix[1]<shape[0]:
+            color=sum(im[pix[1]][pix[0]])/len(im[pix[1]][pix[0]])
+            #print(im[pix[0]][pix[1]])
+            #print(color)
+            if color<40:
                 return i
+        else:
+            print(shape)
+            print(pix)
     return len(line)
 
 def test_intersect(n_lines,im):
@@ -244,21 +250,62 @@ def test_intersect(n_lines,im):
     L_intersect=[]
     for i in range(len(L_pix_lines)):
         L_intersect.append(intersect(im,L_pix_lines[i]))
-    img=Image.fromarray(im,"RGB")
-    plt.imshow(img)
-    for i in range(len(L_end_points)):
-        plt.plot([c[0],L_end_points[i][0]],[c[1],L_end_points[i][1]],color='r')
+    
+    #for i in range(len(L_end_points)):
+    #    plt.plot([c[0],L_end_points[i][0]],[c[1],L_end_points[i][1]],color='r')
+    im=im.copy()
     for i in range(len(L_pix_lines)):
         line=L_pix_lines[i]
         inter=L_intersect[i]
         if inter==len(line):
-            plt.plot(L_end_points[i][0],L_end_points[i][1],color='g',marker='+')
+            #print(line[-2])
+            for j in range(len(line)):
+                
+                if line[j][1]>959:
+                    line[j][1]=959
+                if line[j][0]>1279:
+                    line[j][0]=1279
+                #print(line[j])
+                #print(im.shape)
+                im[line[j][1]][line[j][0]]=[255,255,255]
+            plt.plot(L_end_points[i][0],L_end_points[i][1],color='g',marker='+',markersize=10)
         else:
+            for j in range(inter):
+                if line[j][1]>959:
+                    line[j][1]=959
+                if line[j][0]>1279:
+                    line[j][0]=1279
+                im[line[j][1]][line[j][0]]=[255,255,255]
             plt.plot(line[inter][0],line[inter][1],color='g',marker='+',markersize=10)
+    img=Image.fromarray(im,"RGB")
+    plt.imshow(img)
     plt.show()
     #function to display the intesecting points and the lines
     #to ensure it is working as it is meant to
     pass
+
+
+def Get_Raycast(im,n_lines):
+    print("a")
+    a=time()
+    c,L_end_points=get_end_points(n_lines) 
+    print(time()-a)#0.0
+    print("b")
+    b=time()
+    L_pix_lines=[]
+    for i in range(len(L_end_points)):
+        L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+    print(time()-b)#0.015
+    print("c")
+    c=time()
+    L_intersect_normed=[]
+    for i in range(len(L_pix_lines)):
+        inter=intersect(im,L_pix_lines[i])
+        L_intersect_normed.append(inter/len(L_pix_lines[i]))
+    print(time()-c)#0.02
+    return L_intersect_normed
+
+
 
 if __name__=="__main__":
     
@@ -268,24 +315,24 @@ if __name__=="__main__":
     sv=ScreenViewer()
     sv.GetHWND('TrackMania United Forever (TMInterface 1.2.0)')
     n_img=0
+    n_lines=20
     print('Press z to begin.')
     keyboard.wait('z')
-    for i in range(1):
+    for i in range(10):
         n_img+=1
         a=time()
         im=sv.GetScreenImg() #try
-        img=Image.fromarray(im,"RGB")
+        L_raycast = Get_Raycast(im,n_lines)
         t=time()-a
-        img.save(f"{n_img}".zfill(10)+".png")
+        #img.save(f"{n_img}".zfill(10)+".png")
         #draw_rays(10,img)
-        test_intersect(10,im)
+        test_intersect(20,im)
         #draw_pixel_lines(10,img)
         print(t)
-    print(im[0])
 
 
     
 
 #issue wwith h and w, got 1038 instead of 1280 and 806 instead of 960
-#choice made to fi"the dimention of the window
+#choice made to fix the dimention of the window
 #most of the time taken is to convert the array to image
