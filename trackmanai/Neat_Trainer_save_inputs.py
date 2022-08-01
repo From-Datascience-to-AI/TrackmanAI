@@ -53,7 +53,7 @@ max_time=35
 no_lines = 20 #need to investigate to upscale that
 filename_prefix = "models/NEAT/Checkpoints"
 checkpoint = None # filename_prefix + "neat-checkpoint-0"
-gen=319 #current gen
+gen=1 #current gen
 server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
 
 
@@ -197,7 +197,7 @@ def intersect(im,line):
             color=sum(im[pix[1]][pix[0]])/len(im[pix[1]][pix[0]])
             #print(im[pix[0]][pix[1]])
             #print(color)
-            if color<40:
+            if color<30:
                 return i
         else:
             print(shape)

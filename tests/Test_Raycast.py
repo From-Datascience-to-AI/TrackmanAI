@@ -235,7 +235,7 @@ def intersect(im,line):
             color=sum(im[pix[1]][pix[0]])/len(im[pix[1]][pix[0]])
             #print(im[pix[0]][pix[1]])
             #print(color)
-            if color<40:
+            if color<30:
                 return i
         else:
             print(shape)
@@ -318,7 +318,7 @@ if __name__=="__main__":
     n_lines=20
     print('Press z to begin.')
     keyboard.wait('z')
-    for i in range(10):
+    for i in range(1):
         n_img+=1
         a=time()
         im=sv.GetScreenImg() #try
