@@ -49,11 +49,11 @@ gamespeed=1
 skip_frames=4
 kill_time= 3
 kill_speed = 10
-max_time=35
+max_time=12
 no_lines = 20 #need to investigate to upscale that
-filename_prefix = "models/NEAT/Checkpoints"
-checkpoint = None # filename_prefix + "neat-checkpoint-0"
-gen=1 #current gen
+filename_prefix = "models/NEAT/Checkpoints/checkpoint-"
+checkpoint = filename_prefix+"231" #None # filename_prefix + "neat-checkpoint-0"
+gen=231 #current gen
 server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
 
 
@@ -208,7 +208,7 @@ def Get_Raycast(im,L_pix_lines):
     L_intersect_normed=[]
     for i in range(len(L_pix_lines)):
         inter=intersect(im,L_pix_lines[i])
-        L_intersect_normed.append(inter/len(L_pix_lines[i]))
+        L_intersect_normed.append(2*inter/len(L_pix_lines[i])-1)
     return L_intersect_normed
 
 def Get_pix_lines(n_lines):
