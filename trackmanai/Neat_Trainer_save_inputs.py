@@ -1,5 +1,13 @@
+"""
+Classes to get the NEAT model running.
+There are classes to :
+    - Asynchronously capture screens of a window and access the captured screen.
+    - Perform a generation step
+"""
 
+# Imports
 from encodings import normalize_encoding
+from xmlrpc.client import Boolean
 from tminterface.client import Client
 from tminterface.interface import TMInterface
 from tminterface.constants import DEFAULT_SERVER_SIZE
@@ -36,6 +44,8 @@ if len(sys.argv) < 0:
     print('Not enough arguments.')
     exit()
 
+
+# Parameters : these should be put in a config file
 # image dimensions
 w=1280
 h=960
@@ -60,11 +70,10 @@ server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
 
 #from https://nicholastsmith.wordpress.com/2017/08/10/poe-ai-part-4-real-time-screen-capture-and-plumbing/?fbclid=IwAR3ZHfVY2oPr1kqhq_o4EthijXh1GLDoK2FYw3bWReRWMUEBWTB8_jhwd1Q
 
-#Asynchronously captures screens of a window. Provides functions for accessing
-#the captured screen.
-
+# Classes
 class ScreenViewer:
- 
+    """ Asynchronously captures screens of a window. Provides functions for accessing the captured screen.
+    """
     def __init__(self):
         #self.mut = Lock()
         self.hwnd = None
@@ -78,10 +87,20 @@ class ScreenViewer:
         #self.bl, self.bt, self.br, self.bb = 12, 31, 12, 20
         self.bl, self.bt, self.br, self.bb = 0, 0, 0, 0
         self.L_pix_lines=Get_pix_lines(n_lines)
-    #Gets handle of window to view
-    #wname:         Title of window to find
-    #Return:        True on success; False on failure
+    
+
     def GetHWND(self, wname):
+        """ Gets handle of window to view.
+        Also updates class parameters for the screen window on success.
+    
+        Parameters
+        ----------
+        wname: str (Title of window to find)
+
+        Output
+        ----------
+        out : bool (True on success; False on failure)
+        """
         self.hwnd = win32gui.FindWindow(None, wname)
         if self.hwnd == 0:
             self.hwnd = None
@@ -89,9 +108,18 @@ class ScreenViewer:
         self.l, self.t, self.r, self.b = win32gui.GetWindowRect(self.hwnd)
         return True
          
-         
-    #Gets the screen of the window referenced by self.hwnd
+
     def GetScreenImg(self):
+        """ Gets the screen of the window referenced by self.hwnd
+    
+        Parameters
+        ----------
+        None
+
+        Output
+        ----------
+        im : np.ndarray (screen image)
+        """
         if self.hwnd is None:
             raise Exception("HWND is none. HWND not called or invalid window name provided.")
         #Remove border around window (8 pixels on each side)
@@ -127,8 +155,19 @@ class ScreenViewer:
         return im
 
 
-
+# Utils functions (should be put in an utils file)
 def get_end_points(n_rays):
+    """ Gets the end points for a given number of rays
+
+    Parameters
+    ----------
+    n_rays: int (number of rays to consider)
+
+    Output
+    ----------
+    start_point: (int, int) (start point for rays propagation)
+    L_points : Array([int, int]) (coords of every end point)
+    """
     shape=(1279,959)
     start_point=(int(shape[0]/2),shape[1]-60) #OK
     L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
@@ -162,8 +201,22 @@ def get_end_points(n_rays):
         L_end_points.append([x,y])
     return start_point,L_end_points
 
+
 #based from https://stackoverflow.com/questions/25837544/get-all-points-of-a-straight-line-in-python?fbclid=IwAR2y-tW6Qmk_1I28KQRF2WslyfmXAFhlQ3_2l0tKL8RQ7qAIj-f6QgBE-NM
 def getLine(x1,y1,x2,y2): #seems good
+    """ Compute a straight line from (x1, y1) to (x2, y2)
+
+    Parameters
+    ----------
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+
+    Output
+    ----------
+    line: Array([int, int]) (each point from (x1, y1) to (x2, y2))
+    """
     if x1==x2: ## Perfectly horizontal line, can be solved easily
         return [[int(x1),int(i)] for i in range(y1,y2,int(abs(y2-y1)/(y2-y1)))]
     else: ## More of a problem, ratios can be used instead
@@ -188,7 +241,19 @@ def getLine(x1,y1,x2,y2): #seems good
             line.reverse()
         return line ## Finally, return the line!
 
+
 def intersect(im,line):
+    """ Gets the intersection index between the line and a different color object (i.e. a wall)
+
+    Parameters
+    ----------
+    im: np.ndarray (screen image)
+    line: Array([int, int])
+
+    Output
+    ----------
+    i: int (index on the line that intersects a different object)
+    """
     for i in range(len(line)):
         pix=line[i]
         shape=im.shape
@@ -204,14 +269,20 @@ def intersect(im,line):
             print(pix)
     return len(line)
 
+
 def Get_Raycast(im,L_pix_lines):
+    """ Gets every (corrected) raycasts on the image
+    """
     L_intersect_normed=[]
     for i in range(len(L_pix_lines)):
         inter=intersect(im,L_pix_lines[i])
         L_intersect_normed.append(2*inter/len(L_pix_lines[i])-1)
     return L_intersect_normed
 
+
 def Get_pix_lines(n_lines):
+    """ Gets every raycasts on the image
+    """
     c,L_end_points=get_end_points(n_lines)
     L_pix_lines=[]
     for i in range(len(L_end_points)):
@@ -220,6 +291,8 @@ def Get_pix_lines(n_lines):
 
 
 class GenClient(Client):
+    """ Class to perform a generation step using tminterface.
+    """
     def __init__(self,L_net,max_time,kill_time):
         super(GenClient,self).__init__()
         self.init_step=True
@@ -244,7 +317,10 @@ class GenClient(Client):
         self.sv=ScreenViewer()
         self.sv.GetHWND('TrackMania United Forever (TMInterface 1.2.0)')
 
+
     def on_registered(self, iface: TMInterface):
+        """ A callback that the client has registered to a TMInterface instance.
+        """
         print(f'Registered to {iface.server_name}')
         #iface.log("Ready. Genome id: " + str(self.genome_id))
         #set gamespeed
@@ -255,14 +331,37 @@ class GenClient(Client):
     
 
     def on_deregistered(self,iface):
+        """ A callback that the client has been deregistered from a TMInterface instance. 
+        This can be emitted when the game closes, the client does not respond in the timeout window, 
+        or the user manually deregisters the client with the deregister command.
+        """
         print(f'deregistered to {iface.server_name}')
 
+
     def on_shutdown(self, iface):
+        """ A callback that the TMInterface server is shutting down. 
+        This is emitted when the game is closed.
+        """
         pass
 
+
     def on_run_step(self, iface, _time:int):
+        """ Called on each “run” step (physics tick). 
+        This method will be called only in normal races and not when validating a replay.
+
+        Parameters
+        ----------
+        iface: TMInterface (the TMInterface object)
+        _time: int (the physics tick)
+
+        Output
+        ----------
+        None
+        """
+        # Update time
         self.time=_time
         if self.time<=0:
+            # Reset state
             self.accelerate=False
             self.brake=False
             self.steer=0
@@ -270,6 +369,7 @@ class GenClient(Client):
             self.pitch=0
             self.roll=0
         if self.time>=0:
+            # Update state
             state=iface.get_simulation_state()
             speed=state.velocity
             yaw_pitch_roll=state.yaw_pitch_roll
@@ -281,6 +381,7 @@ class GenClient(Client):
             speed=sum([abs(speed[i]) for i in range(3)])
             self.speed=speed
             if self.init_step:
+                # Initialize step
                 self.init_step=False
                 self.current_step+=1
                 self.im=self.sv.GetScreenImg() #try
@@ -305,6 +406,7 @@ class GenClient(Client):
                 self.steer = int(steer*65536)
 
             else:
+                # Update step
                 #one screenshot every skip_frame frames
                 if self.current_step%self.skip_frames==0:
                     self.im=self.sv.GetScreenImg()
@@ -367,27 +469,54 @@ class GenClient(Client):
                             iface.close()
                             self.finished=True
 
+
     def on_simulation_begin(self, iface):
+        """ Called when a new simulation session is started (when validating a replay).
+        """
         pass
+
 
     def on_simulation_step(self, iface, _time:int):
+        """ Called when a new simulation session is ended (when validating a replay).
+        """
         pass
+
 
     def on_simulation_end(self, iface, result:int):
-        #pas call dans les run
+        """ Called on each simulation step (physics tick). 
+        This method will be called only when validating a replay.
+        """
         pass
 
+
     def on_checkpoint_count_changed(self, iface, current:int, target:int):
+        """ Called when the current checkpoint count changed 
+        (a new checkpoint has been passed by the vehicle).
+
+        Parameters
+        ----------
+        iface: TMInterface (the TMInterface object)
+        current: int (the current amount of checkpoints passed)
+        target: int (the total amount of checkpoints on the map (including finish))
+
+        Output
+        ----------
+        None
+        """
+        # Increase this client's fitness
         self.fitness+=10000/(self.time/1000)
         if current==target:#case of a finish
+            # High reward based on time
             self.fitness+=100000/(self.time/10000)
             #iface.log(str(self.fitness))
-            iface.prevent_simulation_finish()
+            iface.prevent_simulation_finish() # Prevents the game from stopping the simulation after a finished race
             
+            # Update fitness
             self.L_fit[self.current_i]=self.fitness
             self.fitness=0
             self.current_i+=1
 
+            # Update NN to consider
             if self.current_i<self.max_i:
                 self.net=self.L_net[self.current_i]
                 self.current_step=0
@@ -402,18 +531,28 @@ class GenClient(Client):
         #choose to stop the run or not
         pass
 
+
     def on_lap_count_changed(self, iface, current:int):
+        """ Called when the current lap count changed (a new lap has been passed).
+        """
         pass
+
 
     def on_custom_command(self, iface, time_from: int, time_to: int, command: str, args: list):
         """
         Called when a custom command has been executed by the user.
-        Args:
-            iface (TMInterface): the TMInterface object
-            time_from (int): if provided by the user, the starting time of the command, otherwise -1
-            time_to (int): if provided by the user, the ending time of the command, otherwise -1
-            command (str): the command name being executed
-            args (list): the argument list provided by the user
+
+        Parameters
+        ----------
+        iface: TMInterface (the TMInterface object)
+        time_from: int (if provided by the user, the starting time of the command, otherwise -1)
+        time_to: int (if provided by the user, the ending time of the command, otherwise -1)
+        command: str (the command name being executed)
+        args: list (the argument list provided by the user)
+
+        Output
+        ----------
+        None
         """
         pass
 
@@ -422,9 +561,15 @@ class GenClient(Client):
         """
         Called when a client exception is thrown. This can happen if opening the shared file fails, or reading from
         it fails.
-        Args:
-            iface (TMInterface): the TMInterface object
-            exception (Exception): the exception being thrown
+
+        Parameters
+        ----------
+        iface: TMInterface (the TMInterface object)
+        exception: Exception (the exception being thrown)
+
+        Output
+        ----------
+        None
         """
         print(f'[Client] Exception reported: {exception}')
         #iface.register(self)#try
@@ -437,19 +582,31 @@ def run_client_gen(client: Client, server_name: str = 'TMInterface0', buffer_siz
     until the client is deregistered in any way. You can set the buffer size yourself to use for
     the connection, by specifying the buffer_size parameter. Using a custom size requires
     launching TMInterface with the /serversize command line parameter: TMInterface.exe /serversize=size.
-    Args:
-        client (Client): the client instance to register
-        server_name (str): the server name to connect to, TMInterface0 by default
-        buffer_size (int): the buffer size to use, the default size is defined by tminterface.constants.DEFAULT_SERVER_SIZE
+
+    Parameters
+    ----------
+    client: Client (the client instance to register)
+    server_name: str (the server name to connect to, TMInterface0 by default)
+    buffer_size: int (the buffer size to use, the default size is defined by tminterface.constants.DEFAULT_SERVER_SIZE)
+
+    Output
+    ----------
+    L_fit: Array(int) (Fitness for each NN that ran a simulation)
+    L_coords: Array(Array([int, int, int])) (each position for the whole run of each NN)
+    L_speeds: Array(Array(int)) (each speed for the whole run of each NN)
+    L_inputs: Array(Array([int, bool, bool, int])) (each inputs for the whole run of each NN)
     """
+    # Instantiate TMInterface object
     iface = TMInterface(server_name, buffer_size)
 
     def handler(signum, frame):
         iface.close()
 
+    # Close connections
     signal.signal(signal.SIGBREAK, handler)
     signal.signal(signal.SIGINT, handler)
 
+    # Register a new client
     iface.register(client)
     while not client.finished:
         time.sleep(0)
@@ -459,6 +616,19 @@ def run_client_gen(client: Client, server_name: str = 'TMInterface0', buffer_siz
 
 
 def eval_genomes(genomes, config):
+    """
+    Evaluates every genome (NN) of the generation
+
+    Parameters
+    ----------
+    genomes: Array(genome) (every NN of the simulation)
+    config: neat.Config (config for the neat algorithm)
+
+    Output
+    ----------
+    None
+    """
+    # Initialize client
     global gen,kill_time,max_time
     gen+=1
     L_net=[]
@@ -466,11 +636,15 @@ def eval_genomes(genomes, config):
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         L_net.append(net)
     max_time2=min(max_time,1+0.5*gen)
+
+    # Run gen
     L_fit,L_coords,L_speeds,L_inputs=run_client_gen(GenClient(L_net,max_time2,kill_time),server_name) #1/6 de sec en plus par génération
 
+    # Update fitness
     for i in range(len(L_fit)):
         genomes[i][1].fitness=L_fit[i]
 
+    # Write generation recap
     filename = 'models/NEAT/Coords/'+str(gen).zfill(5)+'.pickle'
     outfile = open(filename,'wb')
     pickle.dump(L_coords,outfile)
@@ -498,7 +672,18 @@ def eval_genomes(genomes, config):
         outfile.close()
 
 def run(config_file, checkpoint=None):
+    """
+    Run simulation
 
+    Parameters
+    ----------
+    config_file: str (path to config file)
+    checkpoint: str (path to checkpoint)
+
+    Output
+    ----------
+    None
+    """
     # Load configuration.
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
@@ -516,7 +701,6 @@ def run(config_file, checkpoint=None):
     p.add_reporter(neat.Checkpointer(generation_interval=1, filename_prefix=filename_prefix))
 
     # Run for up to global no generations.
-    
     winner = p.run(eval_genomes, no_generations)
     #winner = p.run(eval_genomes, no_generations)
 
@@ -540,7 +724,9 @@ def run(config_file, checkpoint=None):
 
 
 def main():
-
+    """ Main function.
+    Launches the simulation.
+    """
     local_dir = os.getcwd()
     config_path = os.path.join(local_dir, 'models/NEAT/config-feedforward')
     print('Press z to begin.')
