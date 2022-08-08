@@ -3,3 +3,5 @@
 __author__ = """Colin Davidson"""
 __email__ = 'colin.davidson@hotmail.fr'
 __version__ = '0.1.0'
+
+from .utils import *
