@@ -9,6 +9,10 @@ import win32con
 import win32ui
 from tminterface.client import Client
 from tminterface.interface import TMInterface
+from tminterface.constants import DEFAULT_SERVER_SIZE
+import signal
+import time
+
 
 # Classes
 class ScreenViewer:
@@ -518,3 +522,43 @@ def get_pix_lines(n_lines):
     for i in range(len(L_end_points)):
         L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
     return L_pix_lines
+
+
+def run_client_gen(client: Client, server_name: str = 'TMInterface0', buffer_size=DEFAULT_SERVER_SIZE):
+    """
+    Connects to a server with the specified server name and registers the client instance.
+    The function closes the connection on SIGBREAK and SIGINT signals and will block
+    until the client is deregistered in any way. You can set the buffer size yourself to use for
+    the connection, by specifying the buffer_size parameter. Using a custom size requires
+    launching TMInterface with the /serversize command line parameter: TMInterface.exe /serversize=size.
+
+    Parameters
+    ----------
+    client: Client (the client instance to register)
+    server_name: str (the server name to connect to, TMInterface0 by default)
+    buffer_size: int (the buffer size to use, the default size is defined by tminterface.constants.DEFAULT_SERVER_SIZE)
+
+    Output
+    ----------
+    L_fit: Array(int) (Fitness for each NN that ran a simulation)
+    L_coords: Array(Array([int, int, int])) (each position for the whole run of each NN)
+    L_speeds: Array(Array(int)) (each speed for the whole run of each NN)
+    L_inputs: Array(Array([int, bool, bool, int])) (each inputs for the whole run of each NN)
+    """
+    # Instantiate TMInterface object
+    iface = TMInterface(server_name, buffer_size)
+
+    def handler(signum, frame):
+        iface.close()
+
+    # Close connections
+    signal.signal(signal.SIGBREAK, handler)
+    signal.signal(signal.SIGINT, handler)
+
+    # Register a new client
+    iface.register(client)
+    while not client.finished:
+        time.sleep(0)
+    iface.close()
+
+    return client.L_fit,client.L_coords,client.L_speeds,client.L_inputs

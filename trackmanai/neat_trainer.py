@@ -1,31 +1,15 @@
 """
-Classes to get the NEAT model running.
-There are classes to :
-    - Asynchronously capture screens of a window and access the captured screen.
-    - Perform a generation step
+Functions to use to build a NEAT system.
 """
 
 # Imports
-from encodings import normalize_encoding
-from xmlrpc.client import Boolean
-from tminterface.client import Client
-from tminterface.interface import TMInterface
-from tminterface.constants import DEFAULT_SERVER_SIZE
-import signal
-from PIL import ImageGrab, ImageEnhance, Image
-import keyboard
-import sys
-import neat
-import time
+from glob import glob
 import os
-import cv2
-import pickle as pickle
-
+import keyboard
+import neat
 from utils import *
-
-#os.environ["PATH"] = r"d:D:\ProgramData\Anaconda3\envs\trackmanAIenv\Lib\site-packagespywin32_system32;" + os.environ["PATH"]
-
-from threading import Thread, Lock
+import pickle as pickle
+import configparser
 
 # In order to visualize the training net, you need to copy visualize.py file into the NEAT directory (you can find it in the NEAT repo)
 # Because of the licence, I am not going to copy it to my github repository
@@ -35,38 +19,8 @@ try:
 except ModuleNotFoundError:
     print('Missing visualize.py file.')
 
-#os.chdir('./NEAT')
-#print(os.getcwd())
 
-if len(sys.argv) < 0:
-    print('Not enough arguments.')
-    exit()
-
-
-# Parameters : these should be put in a config file
-# image dimensions
-w=1280
-h=960
-
-n_lines=20
-# hyperparams
-#threshold = 0.5
-no_generations = 1000 #20 for straight with 8sec of max
-#max_fitness = 100.0
-gamespeed=1
-skip_frames=4
-kill_time= 3
-kill_speed = 10
-max_time=12
-no_lines = 20 #need to investigate to upscale that
-filename_prefix = "models/NEAT/Checkpoints/checkpoint-"
-checkpoint = filename_prefix+"256" #None # filename_prefix + "neat-checkpoint-0"
-gen=256 #current gen
-server_name=f'TMInterface{sys.argv[1]}' if len(sys.argv)>1 else 'TMInterface0'
-window_name = 'TrackMania Nations Forever (TMInterface 1.2.0)'
-sv = ScreenViewer(n_lines, w, h)
-
-
+# Functions
 def eval_genomes(genomes, config):
     """
     Evaluates every genome (NN) of the generation
@@ -81,7 +35,7 @@ def eval_genomes(genomes, config):
     None
     """
     # Initialize client
-    global gen,kill_time,max_time
+    global gen
     gen+=1
     L_net=[]
     for genome_id, genome in genomes:
@@ -123,7 +77,8 @@ def eval_genomes(genomes, config):
             outfile.write(str(time)+'steer '+str(steer).zfill(5)+'\n')
         outfile.close()
 
-def run(config_file, checkpoint=None):
+
+def run(config_file, checkpoint=None, no_generations=1000):
     """
     Run simulation
 
@@ -131,6 +86,7 @@ def run(config_file, checkpoint=None):
     ----------
     config_file: str (path to config file)
     checkpoint: str (path to checkpoint)
+    no_generations: int (number of generations)
 
     Output
     ----------
@@ -175,12 +131,44 @@ def run(config_file, checkpoint=None):
     # p.run(eval_genomes, 10)
 
 
-def main():
-    """ Main function.
-    Launches the simulation.
+def train_neat(run_config="./models/config.ini",
+    model_config="./models/NEAT/config-feedforward",
+    checkpoint="./models/NEAT/Checkpoints/checkpoint-0",
+    no_generations=1000):
     """
-    local_dir = os.getcwd()
-    config_path = os.path.join(local_dir, 'models/NEAT/config-feedforward')
+    Main function.
+
+    Parameters
+    ----------
+    run_config: str (path to run configuration)
+    model_config: str (path to model configuration)
+    checkpoint: str (name of the checkpoint to load)
+    no_generations: int (number of generations to run)
+
+    Output
+    ----------
+    None
+    """
+    # Read run config file
+    config_file = configparser.ConfigParser()
+    config_file.read(run_config)
+
+    # Define config variables
+    global w, h, window_name, n_lines, server_name, gamespeed, skip_frames, kill_time, kill_speed, max_time, no_lines
+    w, h, window_name = int(config_file['Window']['w']), int(config_file['Window']['h']), config_file['Window']['window_name']
+    n_lines = int(config_file['Image']['n_lines'])
+    server_name, gamespeed, skip_frames = config_file['Game']['server_name'], int(config_file['Game']['gamespeed']), int(config_file['Game']['skip_frames'])
+    kill_time, kill_speed = int(config_file['Game']['kill_time']), int(config_file['Game']['kill_speed'])
+    max_time, no_lines = int(config_file['Game']['max_time']), int(config_file['Game']['no_lines'])
+    global sv
+    sv = ScreenViewer(n_lines, w, h)
+
+    # Get information from checkpoint
+    checkpoint_infos = checkpoint.split('/')[-1].split('-')
+    global filename_prefix, gen
+    filename_prefix, gen = checkpoint_infos[0], int(checkpoint_infos[-1])
+
+    # Wait for user's input
     print('Press z to begin.')
     keyboard.wait('z')
 
@@ -189,8 +177,11 @@ def main():
             if cpt[:4] == 'neat':
                 os.unlink('./'+cpt)
 
-    run(config_path, checkpoint)
-    
+    run(model_config, checkpoint, no_generations)
+
 
 if __name__ == '__main__':
-    main()
+    train_neat(run_config="../models/config.ini",
+    model_config="../models/NEAT/config-feedforward",
+    checkpoint="../models/NEAT/Checkpoints/checkpoint-0",
+    no_generations=1000)
