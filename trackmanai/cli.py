@@ -20,6 +20,7 @@ def main():
     # Train NEAT model subparser
     subparser = parser.add_subparsers()
     parser_train_neat = subparser.add_parser('train_neat', help="Trains a NEAT model following a given config.")
+    parser_train_neat.add_argument('--model_dir', type=str, default="./models/NEAT")
     parser_train_neat.add_argument('--run_config', type=str, default="./models/config.ini")
     parser_train_neat.add_argument('--model_config', type=str, default="./models/NEAT/config-feedforward")
     parser_train_neat.add_argument('--checkpoint', type=str, default="./models/NEAT/Checkpoints/checkpoint-0")
