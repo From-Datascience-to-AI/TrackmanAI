@@ -9,6 +9,8 @@ import neat
 from utils import *
 import pickle as pickle
 import configparser
+import signal
+from tminterface.interface import TMInterface
 
 # In order to visualize the training net, you need to copy visualize.py file into the NEAT directory (you can find it in the NEAT repo)
 # Because of the licence, I am not going to copy it to my github repository
@@ -19,7 +21,295 @@ except ModuleNotFoundError:
     print('Missing visualize.py file.')
 
 
-# Create NEAT Trainer class
+# NEAT Client Gen Class
+class GenClient(Client):
+    """ Class to perform a generation step using tminterface.
+    """
+    def __init__(self, L_net, max_time, kill_time, sv, skip_frames, wn, gs, ks):
+        super(GenClient,self).__init__()
+        self.init_step=True
+        self.fitness=0
+        self.max_time=max_time*1000
+        self.kill_time=kill_time*1000
+        self.current_i=0
+        self.net=L_net[0]
+        self.max_i=len(L_net)
+        self.current_step=0
+        self.skip_frames=skip_frames
+        self.L_coords=[[] for i in range(len(L_net))]
+        self.L_speeds=[[] for i in range(len(L_net))]
+        self.L_inputs=[[] for i in range(len(L_net))]
+        self.L_fit=[0 for i in range(len(L_net))]
+        self.L_net=L_net
+        self.checkpoint_count=0
+        self.time=-9999
+        self.ready_max_steps=60
+        self.ready_current_steps=0
+        self.finished=False
+        self.sv=sv
+        self.sv.getHWND(wn)
+        self.gamespeed = gs
+        self.kill_speed = ks
+
+
+    def on_registered(self, iface: TMInterface):
+        """ A callback that the client has registered to a TMInterface instance.
+        """
+        print(f'Registered to {iface.server_name}')
+        #iface.log("Ready. Genome id: " + str(self.genome_id))
+        #set gamespeed
+        iface.set_timeout(5000)
+        if self.gamespeed!=1.0:
+            iface.set_speed(self.gamespeed)
+        iface.give_up()
+    
+
+    def on_deregistered(self,iface):
+        """ A callback that the client has been deregistered from a TMInterface instance. 
+        This can be emitted when the game closes, the client does not respond in the timeout window, 
+        or the user manually deregisters the client with the deregister command.
+        """
+        print(f'deregistered to {iface.server_name}')
+
+
+    def on_shutdown(self, iface):
+        """ A callback that the TMInterface server is shutting down. 
+        This is emitted when the game is closed.
+        """
+        pass
+
+
+    def on_run_step(self, iface, _time:int):
+        """ Called on each “run” step (physics tick). 
+        This method will be called only in normal races and not when validating a replay.
+
+        Parameters
+        ----------
+        iface: TMInterface (the TMInterface object)
+        _time: int (the physics tick)
+
+        Output
+        ----------
+        None
+        """
+        # Update time
+        self.time=_time
+        if self.time<=0:
+            # Reset state
+            self.accelerate=False
+            self.brake=False
+            self.steer=0
+            self.yaw=0
+            self.pitch=0
+            self.roll=0
+        if self.time>=0:
+            # Update state
+            state=iface.get_simulation_state()
+            speed=state.velocity
+            yaw_pitch_roll=state.yaw_pitch_roll
+            self.yaw=yaw_pitch_roll[0]
+            self.pitch=yaw_pitch_roll[1]
+            self.roll=yaw_pitch_roll[2]
+            self.L_speeds[self.current_i].append(speed)
+            self.L_coords[self.current_i].append(state.position)
+            speed=sum([abs(speed[i]) for i in range(3)])
+            self.speed=speed
+            if self.init_step:
+                # Initialize step
+                self.init_step=False
+                self.current_step+=1
+                self.im=self.sv.getScreenImg() #try
+                #self.img=Image.fromarray(self.img,"RGB")
+                #self.img.save(f"{self.time}".zfill(10)+".png")
+                #self.img = ImageGrab.grab()
+                #Image.new(self.img).save(f"{self.time}".zfill(10)+".png")
+                self.L_pix_lines=self.sv.L_pix_lines
+                #self.img = ImageGrab.grab()
+                self.L_raycast = get_raycast(self.im,self.L_pix_lines)
+                self.inputs=self.L_raycast
+                self.inputs.append(speed)
+                self.inputs.append(self.yaw)
+                self.inputs.append(self.pitch)
+                self.inputs.append(self.roll)
+                #iface.log(str(self.img[:-4]))
+                output = np.array(self.net.activate(self.inputs))
+                #inputs
+                self.accelerate=output[1]>0
+                self.brake= output[2]>0
+                steer = output[0]
+                self.steer = int(steer*65536)
+
+            else:
+                # Update step
+                #one screenshot every skip_frame frames
+                if self.current_step%self.skip_frames==0:
+                    self.im=self.sv.getScreenImg()
+                    #self.img.save("test.png") #to work on the frame processing
+                    self.L_pix_lines=self.sv.L_pix_lines
+                    self.L_raycast = get_raycast(self.im,self.L_pix_lines)
+                    self.inputs=self.L_raycast
+                    self.inputs.append(speed)
+                    self.inputs.append(self.yaw)
+                    self.inputs.append(self.pitch)
+                    self.inputs.append(self.roll)
+                    #iface.log(str(self.img[:-4]))
+                    output = np.array(self.net.activate(self.inputs))
+                    #inputs
+                    self.accelerate=output[1]>0
+                    self.brake= output[2]>0
+                    steer = output[0]
+                    self.steer = int(steer*65536)
+
+                self.L_inputs[self.current_i].append([self.time,self.accelerate,self.brake,self.steer])
+                iface.set_input_state(accelerate=self.accelerate,brake=self.brake,steer=self.steer)
+                #score for moving up to 0.04 per frame
+                self.fitness+=self.speed/10000
+                self.current_step+=1
+                #update nn situation
+                #input to nn
+                #output from nn
+                #execute the output
+                if self.time>=self.max_time:
+                    #iface.log(str(self.fitness))
+                    self.L_fit[self.current_i]=self.fitness
+                    self.fitness=0
+                    self.current_i+=1
+
+                    if self.current_i<self.max_i:
+                        self.net=self.L_net[self.current_i]
+                        self.current_step=0
+                        self.init_step=True
+                        iface.give_up()
+                    else:
+                        #self.sv.Stop()
+                        iface.close()
+                        self.finished=True
+                else:
+                    if self.time>self.kill_time and self.speed<self.kill_speed:
+                        #iface.log(str(self.speed))
+                        #iface.log(str(self.fitness))
+                        
+                        self.L_fit[self.current_i]=self.fitness
+                        self.fitness=0
+                        self.current_i+=1
+
+                        if self.current_i<self.max_i:
+                            self.net=self.L_net[self.current_i]
+                            self.current_step=0
+                            self.init_step=True
+                            iface.give_up()
+                        else:
+                            #self.sv.Stop()
+                            iface.close()
+                            self.finished=True
+
+
+    def on_simulation_begin(self, iface):
+        """ Called when a new simulation session is started (when validating a replay).
+        """
+        pass
+
+
+    def on_simulation_step(self, iface, _time:int):
+        """ Called when a new simulation session is ended (when validating a replay).
+        """
+        pass
+
+
+    def on_simulation_end(self, iface, result:int):
+        """ Called on each simulation step (physics tick). 
+        This method will be called only when validating a replay.
+        """
+        pass
+
+
+    def on_checkpoint_count_changed(self, iface, current:int, target:int):
+        """ Called when the current checkpoint count changed 
+        (a new checkpoint has been passed by the vehicle).
+
+        Parameters
+        ----------
+        iface: TMInterface (the TMInterface object)
+        current: int (the current amount of checkpoints passed)
+        target: int (the total amount of checkpoints on the map (including finish))
+
+        Output
+        ----------
+        None
+        """
+        # Increase this client's fitness
+        self.fitness+=10000/(self.time/1000)
+        if current==target:#case of a finish
+            # High reward based on time
+            self.fitness+=100000/(self.time/10000)
+            #iface.log(str(self.fitness))
+            iface.prevent_simulation_finish() # Prevents the game from stopping the simulation after a finished race
+            
+            # Update fitness
+            self.L_fit[self.current_i]=self.fitness
+            self.fitness=0
+            self.current_i+=1
+
+            # Update NN to consider
+            if self.current_i<self.max_i:
+                self.net=self.L_net[self.current_i]
+                self.current_step=0
+                self.init_step=True
+                iface.give_up()
+            else:
+                #self.sv.Stop()
+                iface.close()
+                self.finished=True
+                
+        #add reward to NN
+        #choose to stop the run or not
+        pass
+
+
+    def on_lap_count_changed(self, iface, current:int):
+        """ Called when the current lap count changed (a new lap has been passed).
+        """
+        pass
+
+
+    def on_custom_command(self, iface, time_from: int, time_to: int, command: str, args: list):
+        """
+        Called when a custom command has been executed by the user.
+
+        Parameters
+        ----------
+        iface: TMInterface (the TMInterface object)
+        time_from: int (if provided by the user, the starting time of the command, otherwise -1)
+        time_to: int (if provided by the user, the ending time of the command, otherwise -1)
+        command: str (the command name being executed)
+        args: list (the argument list provided by the user)
+
+        Output
+        ----------
+        None
+        """
+        pass
+
+
+    def on_client_exception(self, iface, exception: Exception):
+        """
+        Called when a client exception is thrown. This can happen if opening the shared file fails, or reading from
+        it fails.
+
+        Parameters
+        ----------
+        iface: TMInterface (the TMInterface object)
+        exception: Exception (the exception being thrown)
+
+        Output
+        ----------
+        None
+        """
+        print(f'[Client] Exception reported: {exception}')
+        #iface.register(self)#try
+
+
+# NEAT Trainer class
 class NEATTrainer(TMTrainer):
     """ NEAT TM Trainer.
     This class has NEAT-related methods :
@@ -34,6 +324,46 @@ class NEATTrainer(TMTrainer):
         n_lines, server_name, gamespeed, skip_frames, 
         kill_time, kill_speed, max_time, no_lines,
         screen_viewer, checkpoint)
+
+
+    def run_client_gen(self, client: Client, server_name: str = 'TMInterface0', buffer_size=DEFAULT_SERVER_SIZE):
+        """
+        Connects to a server with the specified server name and registers the client instance.
+        The function closes the connection on SIGBREAK and SIGINT signals and will block
+        until the client is deregistered in any way. You can set the buffer size yourself to use for
+        the connection, by specifying the buffer_size parameter. Using a custom size requires
+        launching TMInterface with the /serversize command line parameter: TMInterface.exe /serversize=size.
+
+        Parameters
+        ----------
+        client: Client (the client instance to register)
+        server_name: str (the server name to connect to, TMInterface0 by default)
+        buffer_size: int (the buffer size to use, the default size is defined by tminterface.constants.DEFAULT_SERVER_SIZE)
+
+        Output
+        ----------
+        L_fit: Array(int) (Fitness for each NN that ran a simulation)
+        L_coords: Array(Array([int, int, int])) (each position for the whole run of each NN)
+        L_speeds: Array(Array(int)) (each speed for the whole run of each NN)
+        L_inputs: Array(Array([int, bool, bool, int])) (each inputs for the whole run of each NN)
+        """
+        # Instantiate TMInterface object
+        iface = TMInterface(server_name, buffer_size)
+
+        def handler(signum, frame):
+            iface.close()
+
+        # Close connections
+        signal.signal(signal.SIGBREAK, handler)
+        signal.signal(signal.SIGINT, handler)
+
+        # Register a new client
+        iface.register(client)
+        while not client.finished:
+            time.sleep(0)
+        iface.close()
+
+        return client.L_fit,client.L_coords,client.L_speeds,client.L_inputs
 
 
     def eval_genomes(self, genomes, config):
@@ -58,7 +388,7 @@ class NEATTrainer(TMTrainer):
         max_time2=min(self.max_time,1+0.5*self.gen)
 
         # Run gen
-        L_fit,L_coords,L_speeds,L_inputs=run_client_gen(GenClient(L_net,max_time2,self.kill_time, self.screen_viewer, self.skip_frames, self.window_name, self.gamespeed, self.kill_speed),self.server_name) #1/6 de sec en plus par génération
+        L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2,self.kill_time, self.screen_viewer, self.skip_frames, self.window_name, self.gamespeed, self.kill_speed),self.server_name) #1/6 de sec en plus par génération
 
         # Update fitness
         for i in range(len(L_fit)):
@@ -191,7 +521,8 @@ def train_neat(model_dir="./models/NEAT",
 
 
 if __name__ == '__main__':
-    train_neat(run_config="../models/config.ini",
+    train_neat(model_dir="../models/NEAT",
+    run_config="../models/config.ini",
     model_config="../models/NEAT/config-feedforward",
     checkpoint="../models/NEAT/Checkpoints/checkpoint-0",
     no_generations=1000)
