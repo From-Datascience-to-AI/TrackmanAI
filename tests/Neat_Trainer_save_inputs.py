@@ -96,7 +96,6 @@ class ScreenViewer:
         Parameters
         ----------
         wname: str (Title of window to find)
-
         Output
         ----------
         out : bool (True on success; False on failure)
@@ -115,7 +114,6 @@ class ScreenViewer:
         Parameters
         ----------
         None
-
         Output
         ----------
         im : np.ndarray (screen image)
@@ -158,11 +156,9 @@ class ScreenViewer:
 # Utils functions (should be put in an utils file)
 def get_end_points(n_rays):
     """ Gets the end points for a given number of rays
-
     Parameters
     ----------
     n_rays: int (number of rays to consider)
-
     Output
     ----------
     start_point: (int, int) (start point for rays propagation)
@@ -205,14 +201,12 @@ def get_end_points(n_rays):
 #based from https://stackoverflow.com/questions/25837544/get-all-points-of-a-straight-line-in-python?fbclid=IwAR2y-tW6Qmk_1I28KQRF2WslyfmXAFhlQ3_2l0tKL8RQ7qAIj-f6QgBE-NM
 def getLine(x1,y1,x2,y2): #seems good
     """ Compute a straight line from (x1, y1) to (x2, y2)
-
     Parameters
     ----------
     x1: int
     y1: int
     x2: int
     y2: int
-
     Output
     ----------
     line: Array([int, int]) (each point from (x1, y1) to (x2, y2))
@@ -244,12 +238,10 @@ def getLine(x1,y1,x2,y2): #seems good
 
 def intersect(im,line):
     """ Gets the intersection index between the line and a different color object (i.e. a wall)
-
     Parameters
     ----------
     im: np.ndarray (screen image)
     line: Array([int, int])
-
     Output
     ----------
     i: int (index on the line that intersects a different object)
@@ -348,12 +340,10 @@ class GenClient(Client):
     def on_run_step(self, iface, _time:int):
         """ Called on each “run” step (physics tick). 
         This method will be called only in normal races and not when validating a replay.
-
         Parameters
         ----------
         iface: TMInterface (the TMInterface object)
         _time: int (the physics tick)
-
         Output
         ----------
         None
@@ -492,13 +482,11 @@ class GenClient(Client):
     def on_checkpoint_count_changed(self, iface, current:int, target:int):
         """ Called when the current checkpoint count changed 
         (a new checkpoint has been passed by the vehicle).
-
         Parameters
         ----------
         iface: TMInterface (the TMInterface object)
         current: int (the current amount of checkpoints passed)
         target: int (the total amount of checkpoints on the map (including finish))
-
         Output
         ----------
         None
@@ -541,7 +529,6 @@ class GenClient(Client):
     def on_custom_command(self, iface, time_from: int, time_to: int, command: str, args: list):
         """
         Called when a custom command has been executed by the user.
-
         Parameters
         ----------
         iface: TMInterface (the TMInterface object)
@@ -549,7 +536,6 @@ class GenClient(Client):
         time_to: int (if provided by the user, the ending time of the command, otherwise -1)
         command: str (the command name being executed)
         args: list (the argument list provided by the user)
-
         Output
         ----------
         None
@@ -561,12 +547,10 @@ class GenClient(Client):
         """
         Called when a client exception is thrown. This can happen if opening the shared file fails, or reading from
         it fails.
-
         Parameters
         ----------
         iface: TMInterface (the TMInterface object)
         exception: Exception (the exception being thrown)
-
         Output
         ----------
         None
@@ -582,13 +566,11 @@ def run_client_gen(client: Client, server_name: str = 'TMInterface0', buffer_siz
     until the client is deregistered in any way. You can set the buffer size yourself to use for
     the connection, by specifying the buffer_size parameter. Using a custom size requires
     launching TMInterface with the /serversize command line parameter: TMInterface.exe /serversize=size.
-
     Parameters
     ----------
     client: Client (the client instance to register)
     server_name: str (the server name to connect to, TMInterface0 by default)
     buffer_size: int (the buffer size to use, the default size is defined by tminterface.constants.DEFAULT_SERVER_SIZE)
-
     Output
     ----------
     L_fit: Array(int) (Fitness for each NN that ran a simulation)
@@ -618,12 +600,10 @@ def run_client_gen(client: Client, server_name: str = 'TMInterface0', buffer_siz
 def eval_genomes(genomes, config):
     """
     Evaluates every genome (NN) of the generation
-
     Parameters
     ----------
     genomes: Array(genome) (every NN of the simulation)
     config: neat.Config (config for the neat algorithm)
-
     Output
     ----------
     None
@@ -674,12 +654,10 @@ def eval_genomes(genomes, config):
 def run(config_file, checkpoint=None):
     """
     Run simulation
-
     Parameters
     ----------
     config_file: str (path to config file)
     checkpoint: str (path to checkpoint)
-
     Output
     ----------
     None
