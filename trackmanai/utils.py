@@ -7,10 +7,6 @@ import numpy as np
 import win32gui
 import win32con
 import win32ui
-from tminterface.client import Client
-from tminterface.interface import TMInterface
-from tminterface.constants import DEFAULT_SERVER_SIZE
-import time
 
 
 # Classes
