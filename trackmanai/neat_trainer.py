@@ -383,7 +383,8 @@ class NEATTrainer(TMTrainer):
         self.gen+=1
         L_net=[]
         for genome_id, genome in genomes:
-            net = neat.nn.FeedForwardNetwork.create(genome, config)
+            net = neat.nn.RecurrentNetwork.create(genome, config)
+            net.reset()
             L_net.append(net)
         max_time2=min(self.max_time,1+0.5*self.gen)
 
@@ -498,6 +499,7 @@ def train_neat(model_dir="./models/NEAT",
     # Read run config file
     config_file = configparser.ConfigParser()
     config_file.read(run_config)
+    print(config_file.sections())
 
     # Define config variables
     w, h, window_name = int(config_file['Window']['w']), int(config_file['Window']['h']), config_file['Window']['window_name']
@@ -524,5 +526,5 @@ if __name__ == '__main__':
     train_neat(model_dir="../models/NEAT",
     run_config="../models/config.ini",
     model_config="../models/NEAT/config-feedforward",
-    checkpoint="../models/NEAT/Checkpoints/checkpoint-0",
-    no_generations=1000)
+    checkpoint=None,
+    no_generations=1000)#"../models/NEAT/Checkpoints/checkpoint-0",
