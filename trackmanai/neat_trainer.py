@@ -20,16 +20,38 @@ try:
 except ModuleNotFoundError:
     print('Missing visualize.py file.')
 
+#paths
+run_config="../models/config.ini"
+model_config="../models/NEAT/config-feedforward"
+model_dir="../models/NEAT"
+checkpoint=None #"../models/NEAT/Checkpoints/checkpoint-0"
+filename_prefix="../models/NEAT/Checkpoints/checkpoint-"
+
+#training vars
+no_generations=1000
+
+#config
+config_file = configparser.ConfigParser()
+config_file.read(run_config)
+
+#global vars from config file
+w, h, window_name,window_name2 = int(config_file['Window']['w']), int(config_file['Window']['h']), config_file['Window']['window_name'],config_file['Window']['window_name2']
+n_lines = int(config_file['Image']['n_lines'])
+server_name, gamespeed, skip_frames = config_file['Game']['server_name'], int(config_file['Game']['gamespeed']), int(config_file['Game']['skip_frames'])
+kill_time, kill_speed = int(config_file['Game']['kill_time']), int(config_file['Game']['kill_speed'])
+max_time, no_lines = int(config_file['Game']['max_time']), int(config_file['Game']['no_lines'])
+screen_viewer = ScreenViewer(n_lines, w, h)
+
 
 # NEAT Client Gen Class
 class GenClient(Client):
     """ Class to perform a generation step using tminterface.
     """
-    def __init__(self, L_net, max_time, kill_time, sv, skip_frames, wn, gs, ks):
+    def __init__(self, L_net,max_time2):
         super(GenClient,self).__init__()
         self.init_step=True
         self.fitness=0
-        self.max_time=max_time*1000
+        self.max_time=max_time2*1000
         self.kill_time=kill_time*1000
         self.current_i=0
         self.net=L_net[0]
@@ -46,10 +68,13 @@ class GenClient(Client):
         self.ready_max_steps=60
         self.ready_current_steps=0
         self.finished=False
-        self.sv=sv
-        self.sv.getHWND(wn)
-        self.gamespeed = gs
-        self.kill_speed = ks
+        self.sv=screen_viewer
+        try:
+            self.sv.getHWND(window_name)
+        except:
+            self.sv.getHWND(window_name2)
+        self.gamespeed = gamespeed
+        self.kill_speed = kill_speed
 
 
     def on_registered(self, iface: TMInterface):
@@ -310,23 +335,23 @@ class GenClient(Client):
 
 
 # NEAT Trainer class
-class NEATTrainer(TMTrainer):
+class NEATTrainer():
     """ NEAT TM Trainer.
     This class has NEAT-related methods :
         - Genomes evaluation
         - Training run
     """
-    def __init__(self, model_dir, model_config, w, h, window_name, 
-    n_lines, server_name, gamespeed, skip_frames, 
-    kill_time, kill_speed, max_time, no_lines, 
-    screen_viewer, checkpoint=None):
-        super().__init__(model_dir, model_config, w, h, window_name, 
-        n_lines, server_name, gamespeed, skip_frames, 
-        kill_time, kill_speed, max_time, no_lines,
-        screen_viewer, checkpoint)
+    def __init__(self):
+        self.filename_prefix = model_dir + "/Checkpoints/checkpoint-"
+        if checkpoint == None:
+            self.gen = 0
+        else:
+            checkpoint_infos = checkpoint.split('/')[-1].split('-')
+            self.gen = int(checkpoint_infos[-1])
+        #super().__init__()
 
 
-    def run_client_gen(self, client: Client, server_name: str = 'TMInterface0', buffer_size=DEFAULT_SERVER_SIZE):
+    def run_client_gen(self, client: Client, buffer_size=DEFAULT_SERVER_SIZE):
         """
         Connects to a server with the specified server name and registers the client instance.
         The function closes the connection on SIGBREAK and SIGINT signals and will block
@@ -386,27 +411,27 @@ class NEATTrainer(TMTrainer):
             net = neat.nn.RecurrentNetwork.create(genome, config)
             net.reset()
             L_net.append(net)
-        max_time2=min(self.max_time,1+0.5*self.gen)
+        max_time2=min(max_time,1+0.5*self.gen)
 
         # Run gen
-        L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2,self.kill_time, self.screen_viewer, self.skip_frames, self.window_name, self.gamespeed, self.kill_speed),self.server_name) #1/6 de sec en plus par génération
+        L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2)) #1/6 de sec en plus par génération
 
         # Update fitness
         for i in range(len(L_fit)):
             genomes[i][1].fitness=L_fit[i]
 
         # Write generation recap
-        filename = self.model_dir+'/Coords/'+str(self.gen).zfill(5)+'.pickle'
+        filename = model_dir+'/Coords/'+str(self.gen).zfill(5)+'.pickle'
         outfile = open(filename,'wb')
         pickle.dump(L_coords,outfile)
         outfile.close()
-        filename = self.model_dir+'/Speeds/'+str(self.gen).zfill(5)+'.pickle'
+        filename = model_dir+'/Speeds/'+str(self.gen).zfill(5)+'.pickle'
         outfile = open(filename,'wb')
         pickle.dump(L_speeds,outfile)
         outfile.close()
 
         for i in range(len(L_inputs)):
-            filename=self.model_dir+"/Inputs/"+str(self.gen).zfill(5)+'_'+str(i).zfill(3)
+            filename=model_dir+"/Inputs/"+str(self.gen).zfill(5)+'_'+str(i).zfill(3)
             l_inputs=L_inputs[i]
             outfile = open(filename,'a')
             for j in range(len(l_inputs)):
@@ -440,12 +465,12 @@ class NEATTrainer(TMTrainer):
         # Load configuration.
         config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                             neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                            self.model_config)
+                            model_config)
 
         # Create the population, which is the top-level object for a NEAT run.
         p = neat.Population(config)
-        if not self.checkpoint == None:
-            p = neat.Checkpointer.restore_checkpoint(self.checkpoint)
+        if not checkpoint == None:
+            p = neat.Checkpointer.restore_checkpoint(checkpoint)
 
         # Add a stdout reporter to show progress in the terminal.
         p.add_reporter(neat.StdOutReporter(True))
@@ -476,11 +501,7 @@ class NEATTrainer(TMTrainer):
         # p.run(eval_genomes, 10)
 
 
-def train_neat(model_dir="./models/NEAT",
-    run_config="./models/config.ini",
-    model_config="./models/NEAT/config-feedforward",
-    checkpoint="./models/NEAT/Checkpoints/checkpoint-0",
-    no_generations=1000):
+def train_neat():
     """
     Main function.
 
@@ -497,22 +518,12 @@ def train_neat(model_dir="./models/NEAT",
     None
     """
     # Read run config file
-    config_file = configparser.ConfigParser()
-    config_file.read(run_config)
-    print(config_file.sections())
+
 
     # Define config variables
-    w, h, window_name = int(config_file['Window']['w']), int(config_file['Window']['h']), config_file['Window']['window_name']
-    n_lines = int(config_file['Image']['n_lines'])
-    server_name, gamespeed, skip_frames = config_file['Game']['server_name'], int(config_file['Game']['gamespeed']), int(config_file['Game']['skip_frames'])
-    kill_time, kill_speed = int(config_file['Game']['kill_time']), int(config_file['Game']['kill_speed'])
-    max_time, no_lines = int(config_file['Game']['max_time']), int(config_file['Game']['no_lines'])
-    screen_viewer = ScreenViewer(n_lines, w, h)
 
-    trainer = NEATTrainer(model_dir, model_config, w, h, window_name, 
-    n_lines, server_name, gamespeed, skip_frames,
-    kill_time, kill_speed, max_time, no_lines,
-    screen_viewer, checkpoint)
+
+    trainer = NEATTrainer()
 
     # Wait for user's input
     print('Press z to begin.')
@@ -523,8 +534,4 @@ def train_neat(model_dir="./models/NEAT",
 
 
 if __name__ == '__main__':
-    train_neat(model_dir="../models/NEAT",
-    run_config="../models/config.ini",
-    model_config="../models/NEAT/config-feedforward",
-    checkpoint=None,
-    no_generations=1000)#"../models/NEAT/Checkpoints/checkpoint-0",
+    train_neat()
