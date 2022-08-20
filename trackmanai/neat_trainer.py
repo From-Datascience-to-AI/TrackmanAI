@@ -35,13 +35,21 @@ config_file = configparser.ConfigParser()
 config_file.read(run_config)
 
 #global vars from config file
-w, h, window_name,window_name2 = int(config_file['Window']['w']), int(config_file['Window']['h']), config_file['Window']['window_name'],config_file['Window']['window_name2']
+#screenshots vars
+w = int(config_file['Window']['w'])
+h = int(config_file['Window']['h'])
+window_name = config_file['Window']['window_name']
+window_name2 = config_file['Window']['window_name2']
 n_lines = int(config_file['Image']['n_lines'])
-server_name, gamespeed, skip_frames = config_file['Game']['server_name'], int(config_file['Game']['gamespeed']), int(config_file['Game']['skip_frames'])
-kill_time, kill_speed = int(config_file['Game']['kill_time']), int(config_file['Game']['kill_speed'])
-max_time, no_lines = int(config_file['Game']['max_time']), int(config_file['Game']['no_lines'])
 screen_viewer = ScreenViewer(n_lines, w, h)
 
+#simulation vars
+server_name = config_file['Game']['server_name']
+gamespeed = int(config_file['Game']['gamespeed'])
+skip_frames = int(config_file['Game']['skip_frames'])
+kill_time = int(config_file['Game']['kill_time'])
+kill_speed = int(config_file['Game']['kill_speed'])
+max_time = int(config_file['Game']['max_time'])
 
 # NEAT Client Gen Class
 class GenClient(Client):
@@ -86,6 +94,7 @@ class GenClient(Client):
         iface.set_timeout(5000)
         if self.gamespeed!=1.0:
             iface.set_speed(self.gamespeed)
+            iface.execute_command("set sim_priority realtime")
         iface.give_up()
     
 
