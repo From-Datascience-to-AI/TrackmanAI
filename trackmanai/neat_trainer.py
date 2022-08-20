@@ -94,7 +94,8 @@ class GenClient(Client):
         iface.set_timeout(5000)
         if self.gamespeed!=1.0:
             iface.set_speed(self.gamespeed)
-            iface.execute_command("set sim_priority realtime")
+        iface.execute_command("set sim_priority realtime")
+        #iface.execute_command("cam 3") #does not work
         iface.give_up()
     
 
