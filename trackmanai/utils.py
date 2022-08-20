@@ -101,7 +101,7 @@ class ScreenViewer:
         return im
 
 
-class TMTrainer:
+class TMTrainer: #to refactor
     """ TrackManAI Trainer.
     """
     def __init__(self, model_dir, model_config, w, h, window_name, 
@@ -144,17 +144,17 @@ def get_end_points(n_rays):
     start_point: (int, int) (start point for rays propagation)
     L_points : Array([int, int]) (coords of every end point)
     """
-    shape=(1279,959)
+    shape=(639,479) #todo: use shape from config
     start_point=(int(shape[0]/2),shape[1]-60) #OK
     L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
     ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
-    lr=((start_point[0]-1279)**2 + (start_point[1]-0)**2)**0.5
+    lr=((start_point[0]-shape[0])**2 + (start_point[1]-0)**2)**0.5
     tetal=np.arccos(-(start_point[0]-0)/ll)#ok
-    tetar=np.arccos(-(start_point[0]-1279)/lr)#ok
+    tetar=np.arccos(-(start_point[0]-shape[0])/lr)#ok
     L_end_points=[]
     for teta in L_teta:
         if teta<=tetar:
-            x=1279
+            x=shape[0]
             if x-start_point[0]!=0:
                 l=abs((x-start_point[0])/np.cos(teta))
                 y=-l*np.sin(teta)+start_point[1]
