@@ -231,20 +231,15 @@ def intersect(im,line):
     ----------
     i: int (index on the line that intersects a different object)
     """
-    for i in range(len(line)):
-        pix=line[i]
-        shape=im.shape
-        #print(shape)
-        if pix[0]<shape[1] and pix[1]<shape[0]:
-            color=sum(im[pix[1]][pix[0]])/len(im[pix[1]][pix[0]])
-            #print(im[pix[0]][pix[1]])
-            #print(color)
-            if color<30:
-                return i
-        else:
-            print(shape)
-            print(pix)
-    return len(line)
+    indexT=np.array(line)[:,::-1].T.tolist()
+    pixels=im[tuple(indexT)]
+    pixels=np.sum(pixels,axis=1)/len(im[0][0])
+    mask=pixels<30
+    mask=mask.tolist()
+    try:
+        return mask.index(True)
+    except:
+        return len(line)
 
 
 def get_raycast(im,L_pix_lines):
