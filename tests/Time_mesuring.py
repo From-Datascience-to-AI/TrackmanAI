@@ -205,7 +205,7 @@ class ScreenViewer:
         mask.append(True)#end of axis 1 is True
         return 2*mask.index(True)/len(line)-1
 
-    def intersect2(self,im,indexT):
+    def intersect2(self,indexT,im):
         """ Gets the intersection index between the line and a different color object (i.e. a wall)
 
         Parameters
@@ -217,7 +217,7 @@ class ScreenViewer:
         ----------
         i: int (index on the line that intersects a different object)
         """
-        pixels=im[tuple(indexT)]
+        pixels=im[indexT]
         pixels=np.sum(pixels,axis=1)/len(im[0][0])
         mask=pixels<30
         mask=mask.tolist()
@@ -238,10 +238,14 @@ class ScreenViewer:
         """ Gets every (corrected) raycasts on the image
         """
         #impossible to use numpy because of the len of lines not equal
+        
+        #return list(map(partial(self.intersect2,im=im),L_indexT)) #to test next
         L_intersect_normed=[]
-        for i in range(len(L_indexT)):
-            inter=self.intersect2(im,L_indexT[i])
-            L_intersect_normed.append(inter)
+        #append=L_intersect_normed.append to test next [self.intersect2(indexT,im) for iter in L_indexT]
+        #try using also return[]
+        for indexT in L_indexT:
+            inter=self.intersect2(indexT,im)
+            L_intersect.append(inter)
         return L_intersect_normed
 
     def get_pix_lines(self,n_lines):
@@ -278,6 +282,7 @@ class ScreenViewer:
 
 
 if __name__=="__main__":
+    #TODO: check identical results
     sv=ScreenViewer(20,640,480,'TrackMania United Forever (TMInterface 1.2.0)')
     print('Press z to begin.')
     keyboard.wait('z')
