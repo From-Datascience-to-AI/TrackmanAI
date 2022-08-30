@@ -19,7 +19,7 @@ class ScreenViewer:
     """ Asynchronously captures screens of a window. Provides functions for accessing the captured screen.
     (from https://nicholastsmith.wordpress.com/2017/08/10/poe-ai-part-4-real-time-screen-capture-and-plumbing/?fbclid=IwAR3ZHfVY2oPr1kqhq_o4EthijXh1GLDoK2FYw3bWReRWMUEBWTB8_jhwd1Q)
     """
-    def __init__(self, n_lines, w, h):
+    def __init__(self, n_lines, w, h,wname):
         #self.mut = Lock()
         self.hwnd = None
         self.its = None         #Time stamp of last image 
@@ -31,10 +31,11 @@ class ScreenViewer:
         #Border on left and top to remove
         #self.bl, self.bt, self.br, self.bb = 12, 31, 12, 20
         self.bl, self.bt, self.br, self.bb = 0, 0, 0, 0
-        self.L_pix_lines=get_pix_lines(n_lines)
         self.w = w
         self.h = h
-    
+        self.L_pix_lines=self.get_pix_lines(n_lines)
+        self.L_indexT=[tuple(np.array(line)[:,::-1].T.tolist()) for line in self.L_pix_lines]
+        self.getHWND(wname)
 
     def getHWND(self, wname):
         """ Gets handle of window to view.
@@ -101,6 +102,147 @@ class ScreenViewer:
         #return Image.fromarray(im,"RGB")
         return im
 
+    def get_end_points(self,n_rays):
+        """ Gets the end points for a given number of rays
+
+        Parameters
+        ----------
+        n_rays: int (number of rays to consider)
+
+        Output
+        ----------
+        start_point: (int, int) (start point for rays propagation)
+        L_points : Array([int, int]) (coords of every end point)
+        """
+        shape=(self.w-1,self.h-1)
+        start_point=(int(shape[0]/2),shape[1]-60) #OK
+        L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
+        ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
+        lr=((start_point[0]-shape[0])**2 + (start_point[1]-0)**2)**0.5
+        tetal=np.arccos(-(start_point[0]-0)/ll)#ok
+        tetar=np.arccos(-(start_point[0]-shape[0])/lr)#ok
+        L_end_points=[]
+        for teta in L_teta:
+            if teta<=tetar:
+                x=shape[0]
+                if x-start_point[0]!=0:
+                    l=abs((x-start_point[0])/np.cos(teta))
+                    y=-l*np.sin(teta)+start_point[1]
+                else:
+                    y=start_point[1]
+            elif teta>=tetal:
+                x=0
+                if x-start_point[0]!=0:
+                    l=abs((x-start_point[0])/np.cos(teta))
+                    y=-l*np.sin(teta)+start_point[1]
+                else:
+                    y=start_point[1]
+            else:
+                y=0
+                if abs(y-start_point[1])>1:
+                    l=abs((y-start_point[1])/np.sin(teta))
+                    x=l*np.cos(teta)+start_point[0]
+                else:
+                    x=start_point[0]
+            L_end_points.append([x,y])
+        return start_point,L_end_points
+
+
+    def getLine(self,x1,y1,x2,y2):
+        """ Compute a straight line from (x1, y1) to (x2, y2)
+        (based on https://stackoverflow.com/questions/25837544/get-all-points-of-a-straight-line-in-python?fbclid=IwAR2y-tW6Qmk_1I28KQRF2WslyfmXAFhlQ3_2l0tKL8RQ7qAIj-f6QgBE-NM)
+
+        Parameters
+        ----------
+        x1: int
+        y1: int
+        x2: int
+        y2: int
+
+        Output
+        ----------
+        line: Array([int, int]) (each point from (x1, y1) to (x2, y2))
+        """
+        if x1==x2: ## Perfectly horizontal line, can be solved easily
+            return [[int(x1),int(i)] for i in range(y1,y2,int(abs(y2-y1)/(y2-y1)))]
+        else: ## More of a problem, ratios can be used instead
+            x_inv=False
+            if x1>x2: ## If the line goes "backwards", flip the positions, to go "forwards" down it.
+                x=x1
+                x1=x2
+                x2=x
+                y=y1
+                y1=y2
+                y2=y
+                x_inv=True
+            slope=(y2-y1)/(x2-x1) ## Calculate the slope of the line
+            line=[]
+            i=0
+            while x1+i < x2: ## Keep iterating until the end of the line is reached
+                i+=1
+                x_end=x1+i
+                y_end=y1+slope*i
+                line.append([int(x_end),int(y_end)]) ## Add the next point on the line
+            if x_inv:
+                line.reverse()
+            return line ## Finally, return the line!
+
+    def intersect(self,indexT,im):
+        """ Gets the intersection index between the line and a different color object (i.e. a wall)
+
+        Parameters
+        ----------
+        im: np.ndarray (screen image)
+        line: Array([int, int])
+
+        Output
+        ----------
+        i: int (index on the line that intersects a different object)
+        """
+        pixels=im[indexT]
+        pixels=np.sum(pixels,axis=1)/len(im[0][0])
+        mask=pixels<30
+        mask=mask.tolist()
+        mask.append(True)#end of axis 1 is True
+        return 2*mask.index(True)/len(indexT[0])-1
+
+    def get_raycast(self,im,L_indexT):
+        """ Gets every (corrected) raycasts on the image
+        """
+        #impossible to use numpy because of the len of lines not equal
+        
+        #return list(map(partial(self.intersect2,im=im),L_indexT)) #to test next
+        L_intersect_normed=[]
+        #append=L_intersect_normed.append to test next [self.intersect2(indexT,im) for iter in L_indexT]
+        #try using also return[]
+        for indexT in L_indexT:
+            inter=self.intersect(indexT,im)
+            L_intersect_normed.append(inter)
+        return L_intersect_normed
+
+    def get_pix_lines(self,n_lines):
+        """ Gets every raycasts on the image
+        """
+        c,L_end_points=self.get_end_points(n_lines)
+        L_pix_lines=[]
+        for i in range(len(L_end_points)):
+            L_pix_lines.append(self.getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+        return L_pix_lines
+
+    def getScreenIntersect(self):
+        im=self.getScreenImg()
+        L_intersect=self.get_raycast(im,self.L_indexT)
+        return L_intersect
+
+    def getScreenIntersect_timed(self):
+        a=time()
+        im=self.getScreenImg()
+        b=time()-a
+        a=time()
+        L_intersect=self.get_raycast(im,self.L_indexT)
+        c=time()-a
+        return L_intersect,[b,c]
+
 
 class TMTrainer: #to refactor
     """ TrackManAI Trainer.
@@ -133,133 +275,11 @@ class TMTrainer: #to refactor
 
 
 # Functions
-def get_end_points(n_rays):
-    """ Gets the end points for a given number of rays
-
-    Parameters
-    ----------
-    n_rays: int (number of rays to consider)
-
-    Output
-    ----------
-    start_point: (int, int) (start point for rays propagation)
-    L_points : Array([int, int]) (coords of every end point)
-    """
-    shape=(639,479) #todo: use shape from config
-    start_point=(int(shape[0]/2),shape[1]-60) #OK
-    L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
-    ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
-    lr=((start_point[0]-shape[0])**2 + (start_point[1]-0)**2)**0.5
-    tetal=np.arccos(-(start_point[0]-0)/ll)#ok
-    tetar=np.arccos(-(start_point[0]-shape[0])/lr)#ok
-    L_end_points=[]
-    for teta in L_teta:
-        if teta<=tetar:
-            x=shape[0]
-            if x-start_point[0]!=0:
-                l=abs((x-start_point[0])/np.cos(teta))
-                y=-l*np.sin(teta)+start_point[1]
-            else:
-                y=start_point[1]
-        elif teta>=tetal:
-            x=0
-            if x-start_point[0]!=0:
-                l=abs((x-start_point[0])/np.cos(teta))
-                y=-l*np.sin(teta)+start_point[1]
-            else:
-                y=start_point[1]
-        else:
-            y=0
-            if abs(y-start_point[1])>1:
-                l=abs((y-start_point[1])/np.sin(teta))
-                x=l*np.cos(teta)+start_point[0]
-            else:
-                x=start_point[0]
-        L_end_points.append([x,y])
-    return start_point,L_end_points
 
 
-def getLine(x1,y1,x2,y2):
-    """ Compute a straight line from (x1, y1) to (x2, y2)
-    (based on https://stackoverflow.com/questions/25837544/get-all-points-of-a-straight-line-in-python?fbclid=IwAR2y-tW6Qmk_1I28KQRF2WslyfmXAFhlQ3_2l0tKL8RQ7qAIj-f6QgBE-NM)
-
-    Parameters
-    ----------
-    x1: int
-    y1: int
-    x2: int
-    y2: int
-
-    Output
-    ----------
-    line: Array([int, int]) (each point from (x1, y1) to (x2, y2))
-    """
-    if x1==x2: ## Perfectly horizontal line, can be solved easily
-        return [[int(x1),int(i)] for i in range(y1,y2,int(abs(y2-y1)/(y2-y1)))]
-    else: ## More of a problem, ratios can be used instead
-        x_inv=False
-        if x1>x2: ## If the line goes "backwards", flip the positions, to go "forwards" down it.
-            x=x1
-            x1=x2
-            x2=x
-            y=y1
-            y1=y2
-            y2=y
-            x_inv=True
-        slope=(y2-y1)/(x2-x1) ## Calculate the slope of the line
-        line=[]
-        i=0
-        while x1+i < x2: ## Keep iterating until the end of the line is reached
-            i+=1
-            x_end=x1+i
-            y_end=y1+slope*i
-            line.append([int(x_end),int(y_end)]) ## Add the next point on the line
-        if x_inv:
-            line.reverse()
-        return line ## Finally, return the line!
 
 
-def intersect(im,line):
-    """ Gets the intersection index between the line and a different color object (i.e. a wall)
 
-    Parameters
-    ----------
-    im: np.ndarray (screen image)
-    line: Array([int, int])
-
-    Output
-    ----------
-    i: int (index on the line that intersects a different object)
-    """
-    indexT=np.array(line)[:,::-1].T.tolist()
-    pixels=im[tuple(indexT)]
-    pixels=np.sum(pixels,axis=1)/len(im[0][0])
-    mask=pixels<30
-    mask=mask.tolist()
-    try:
-        return mask.index(True)
-    except:
-        return len(line)
-
-
-def get_raycast(im,L_pix_lines):
-    """ Gets every (corrected) raycasts on the image
-    """
-    L_intersect_normed=[]
-    for i in range(len(L_pix_lines)):
-        inter=intersect(im,L_pix_lines[i])
-        L_intersect_normed.append(2*inter/len(L_pix_lines[i])-1)
-    return L_intersect_normed
-
-
-def get_pix_lines(n_lines):
-    """ Gets every raycasts on the image
-    """
-    c,L_end_points=get_end_points(n_lines)
-    L_pix_lines=[]
-    for i in range(len(L_end_points)):
-        L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
-    return L_pix_lines
 
 
 class MapLoader(Client):

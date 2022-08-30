@@ -288,9 +288,9 @@ if __name__=="__main__":
     keyboard.wait('z')
     L_times=[]
     L_times2=[]
-    for i in range(10):
+    for i in range(100):
         L_intersect,L_ab=sv.getScreenIntersect_timed()
-        L_intersect,L_ab2=sv.getScreenIntersect_timed2()
+        L_intersect2,L_ab2=sv.getScreenIntersect_timed2()
         L_times.append(L_ab)
         L_times2.append(L_ab2)
 

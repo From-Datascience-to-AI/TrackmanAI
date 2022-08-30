@@ -6,11 +6,15 @@ Functions to use to build a NEAT system.
 import os
 import keyboard
 import neat
-from utils import *
+from utils import ScreenViewer
 import pickle as pickle
 import configparser
 import signal
 from tminterface.interface import TMInterface
+from tminterface.client import Client
+from tminterface.constants import DEFAULT_SERVER_SIZE
+import time
+import numpy as np
 
 # In order to visualize the training net, you need to copy visualize.py file into the NEAT directory (you can find it in the NEAT repo)
 # Because of the licence, I am not going to copy it to my github repository
@@ -41,7 +45,10 @@ h = int(config_file['Window']['h'])
 window_name = config_file['Window']['window_name']
 window_name2 = config_file['Window']['window_name2']
 n_lines = int(config_file['Image']['n_lines'])
-screen_viewer = ScreenViewer(n_lines, w, h)
+try:
+    screen_viewer = ScreenViewer(n_lines, w, h,window_name)
+except:
+    screen_viewer = ScreenViewer(n_lines, w, h,window_name2)
 
 #simulation vars
 server_name = config_file['Game']['server_name']
@@ -77,10 +84,6 @@ class GenClient(Client):
         self.ready_current_steps=0
         self.finished=False
         self.sv=screen_viewer
-        try:
-            self.sv.getHWND(window_name)
-        except:
-            self.sv.getHWND(window_name2)
         self.gamespeed = gamespeed
         self.kill_speed = kill_speed
 
@@ -153,14 +156,7 @@ class GenClient(Client):
                 # Initialize step
                 self.init_step=False
                 self.current_step+=1
-                self.im=self.sv.getScreenImg() #try
-                #self.img=Image.fromarray(self.img,"RGB")
-                #self.img.save(f"{self.time}".zfill(10)+".png")
-                #self.img = ImageGrab.grab()
-                #Image.new(self.img).save(f"{self.time}".zfill(10)+".png")
-                self.L_pix_lines=self.sv.L_pix_lines
-                #self.img = ImageGrab.grab()
-                self.L_raycast = get_raycast(self.im,self.L_pix_lines)
+                self.L_raycast = self.sv.getScreenIntersect()
                 self.inputs=self.L_raycast
                 self.inputs.append(speed)
                 self.inputs.append(self.yaw)
@@ -178,10 +174,7 @@ class GenClient(Client):
                 # Update step
                 #one screenshot every skip_frame frames
                 if self.current_step%self.skip_frames==0:
-                    self.im=self.sv.getScreenImg()
-                    #self.img.save("test.png") #to work on the frame processing
-                    self.L_pix_lines=self.sv.L_pix_lines
-                    self.L_raycast = get_raycast(self.im,self.L_pix_lines)
+                    self.L_raycast = self.sv.getScreenIntersect()
                     self.inputs=self.L_raycast
                     self.inputs.append(speed)
                     self.inputs.append(self.yaw)
