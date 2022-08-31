@@ -28,7 +28,7 @@ except ModuleNotFoundError:
 run_config="../models/config.ini"
 model_config="../models/NEAT/config-feedforward"
 model_dir="../models/NEAT"
-checkpoint=None #"../models/NEAT/Checkpoints/checkpoint-0"
+checkpoint="../models/NEAT/Checkpoints/checkpoint-83"#None #"../models/NEAT/Checkpoints/checkpoint-0"
 filename_prefix="../models/NEAT/Checkpoints/checkpoint-"
 
 #training vars
@@ -56,7 +56,7 @@ gamespeed = int(config_file['Game']['gamespeed'])
 skip_frames = int(config_file['Game']['skip_frames'])
 kill_time = int(config_file['Game']['kill_time'])
 kill_speed = int(config_file['Game']['kill_speed'])
-max_time = int(config_file['Game']['max_time'])
+max_time = 35#int(config_file['Game']['max_time'])
 
 # NEAT Client Gen Class
 class GenClient(Client):
@@ -416,8 +416,20 @@ class NEATTrainer():
             L_net.append(net)
         max_time2=min(max_time,1+0.5*self.gen)
 
+        #TODO: check if bug
+        #case of bug: launch again the generation
         # Run gen
         L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2)) #1/6 de sec en plus par génération
+
+        #TODO: ADD superviser call here to change map if good scores
+        threshold=10/100
+        n_good_scores=0
+        for score in L_fit:
+            if score>= 50000:
+                n_good_scores+=1
+        if n_good_scores/len(L_fit)>threshold:
+            raise Exception("succes","Threshold meet")
+
 
         # Update fitness
         for i in range(len(L_fit)):
@@ -432,6 +444,7 @@ class NEATTrainer():
         outfile = open(filename,'wb')
         pickle.dump(L_speeds,outfile)
         outfile.close()
+        #HERE: add logs
 
         for i in range(len(L_inputs)):
             filename=model_dir+"/Inputs/"+str(self.gen).zfill(5)+'_'+str(i).zfill(3)

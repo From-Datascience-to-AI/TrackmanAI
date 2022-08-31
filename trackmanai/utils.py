@@ -276,7 +276,28 @@ class TMTrainer: #to refactor
 
 # Functions
 
+class Superviser:
+    def __init__(self,threshold,L_maps,L_map_scores) -> None:
+        self.threshold=threshold
+        self.L_maps=L_maps
+        self.L_map_scores=L_map_scores
+        self.i=0
+        self.current_map=self.L_maps[self.i]
+        self.current_map_score=self.L_map_scores[self.i]
 
+    def supervise(self,L_scores):
+        n_good_scores=0
+        for score in L_scores:
+            if score>= self.current_map_score:
+                n_good_scores+=1
+        if n_good_scores/len(L_scores)>=self.threshold:
+            if self.i+1<len(self.L_maps):
+                self.i+=1
+                self.current_map=self.L_maps[self.i]
+                self.current_map_score=self.L_map_scores[self.i]
+                LoadMap(self.current_map)
+
+        
 
 
 
