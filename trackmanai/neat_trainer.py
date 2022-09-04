@@ -28,7 +28,7 @@ except ModuleNotFoundError:
 run_config="../models/config.ini"
 model_config="../models/NEAT/config-feedforward"
 model_dir="../models/NEAT"
-checkpoint=None #"../models/NEAT/Checkpoints/checkpoint-0"
+checkpoint="../models/NEAT/Checkpoints/checkpoint-12" #None
 filename_prefix="../models/NEAT/Checkpoints/checkpoint-"
 
 #training vars
@@ -56,7 +56,7 @@ gamespeed = int(config_file['Game']['gamespeed'])
 skip_frames = int(config_file['Game']['skip_frames'])
 kill_time = int(config_file['Game']['kill_time'])
 kill_speed = int(config_file['Game']['kill_speed'])
-max_time = 35#int(config_file['Game']['max_time'])
+max_time = 7#int(config_file['Game']['max_time'])
 threshold=20 #20%
 D_maps=config_file.items("Map")
 D_maps_times=config_file.items("Map_max_time")
@@ -276,7 +276,7 @@ class GenClient(Client):
         self.fitness+=self.scorer.score_checkpoint(self.time)
         if current==target:#case of a finish
             # High reward based on time
-            self.fitness+=self.scorer.score_finish()(self.time)
+            self.fitness+=self.scorer.score_finish(self.time)
             #iface.log(str(self.fitness))
             iface.prevent_simulation_finish() # Prevents the game from stopping the simulation after a finished race
             
