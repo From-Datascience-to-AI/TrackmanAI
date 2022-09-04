@@ -333,10 +333,10 @@ class Scorer:
         return speed/10000
 
     def score_checkpoint(self,time):
-        return 1000+10000/((self.max_time-time)/1000)
+        return 1000+100*(self.max_time-time)
 
     def score_finish(self,time):
-        return 100000+100000/((self.max_time-time)/10000)
+        return 100000+1000*(self.max_time-time)
 
 class MapLoader(Client):
     def __init__(self, map):
