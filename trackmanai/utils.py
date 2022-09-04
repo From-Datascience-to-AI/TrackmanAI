@@ -37,7 +37,8 @@ class ScreenViewer:
         self.h = h
         self.L_pix_lines=self.get_pix_lines(n_lines)
         self.L_indexT=[tuple(np.array(line)[:,::-1].T.tolist()) for line in self.L_pix_lines]
-        self.getHWND(wname)
+        if not self.getHWND(wname):
+            raise Exception("HWND is none. HWND not called or invalid window name provided.")
 
     def getHWND(self, wname):
         """ Gets handle of window to view.
