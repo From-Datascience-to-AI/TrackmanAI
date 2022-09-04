@@ -278,26 +278,65 @@ class TMTrainer: #to refactor
 
 
 class Superviser:
-    def __init__(self,threshold,L_maps,L_map_scores) -> None:
+    #TODO: upgrade the D_maps format
+    def __init__(self,threshold,D_maps,D_maps_times,replay_interval) -> None:
         self.threshold=threshold
-        self.L_maps=L_maps
-        self.L_map_scores=L_map_scores
+        self.D_maps=D_maps
+        self.D_maps_times=D_maps_times
         self.i=0
-        self.current_map=self.L_maps[self.i]
-        self.current_map_score=self.L_map_scores[self.i]
+        self.current_map=self.D_maps[self.i][1]
+        self.gen_count=0
+        self.replay_interval=replay_interval
+        self.LoadMap(self.current_map)
+
 
     def supervise(self,L_scores):
         n_good_scores=0
         for score in L_scores:
-            if score>= self.current_map_score:
+            if score>= 100000:
                 n_good_scores+=1
-        if n_good_scores/len(L_scores)>=self.threshold:
+        if n_good_scores/len(L_scores)>=self.threshold: #changes map if threshold is exceeded
             if self.i+1<len(self.L_maps):
                 self.i+=1
-                self.current_map=self.L_maps[self.i]
-                self.current_map_score=self.L_map_scores[self.i]
-                LoadMap(self.current_map)
+                self.current_map=self.L_maps[self.i][1]
+                self.current_map_time=self.D_maps_times[self.i][1]
+                self.LoadMap(self.current_map)
 
+    def train(self,train_func,L_net,max_time):
+        return train_func(L_net,max_time)
+
+    def LoadMap(self,map):
+        client=MapLoader(map)
+        buffer_size=DEFAULT_SERVER_SIZE
+        server_name="TMInterface0"
+        iface = TMInterface(server_name, buffer_size)
+
+        def handler(signum, frame):
+            iface.close()
+
+        # Close connections
+        signal.signal(signal.SIGBREAK, handler)
+        signal.signal(signal.SIGINT, handler)
+
+        # Register a new client
+        iface.register(client)
+        while not client.finished:
+            time.sleep(0)
+        iface.close()
+        time.sleep(5)
+
+class Scorer:
+    def __init__(self,max_time):
+        self.max_time=max_time
+
+    def score_step(self,speed):
+        return speed/10000
+
+    def score_checkpoint(self,time):
+        return 1000+10000/((self.max_time-time)/1000)
+
+    def score_finish(self,time):
+        return 100000+100000/((self.max_time-time)/10000)
 
 class MapLoader(Client):
     def __init__(self, map):
@@ -398,22 +437,3 @@ class Logger():
 
 
 # Functions
-def LoadMap(map):
-    client=MapLoader(map)
-    buffer_size=DEFAULT_SERVER_SIZE
-    server_name="TMInterface0"
-    iface = TMInterface(server_name, buffer_size)
-
-    def handler(signum, frame):
-        iface.close()
-
-    # Close connections
-    signal.signal(signal.SIGBREAK, handler)
-    signal.signal(signal.SIGINT, handler)
-
-    # Register a new client
-    iface.register(client)
-    while not client.finished:
-        time.sleep(0)
-    iface.close()
-    time.sleep(5)

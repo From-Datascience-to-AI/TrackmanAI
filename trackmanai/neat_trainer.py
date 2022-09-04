@@ -6,7 +6,7 @@ Functions to use to build a NEAT system.
 import os
 import keyboard
 import neat
-from utils import ScreenViewer, Logger
+from utils import ScreenViewer, Logger, Superviser, Scorer
 import pickle as pickle
 import configparser
 import signal
@@ -57,6 +57,12 @@ skip_frames = int(config_file['Game']['skip_frames'])
 kill_time = int(config_file['Game']['kill_time'])
 kill_speed = int(config_file['Game']['kill_speed'])
 max_time = 35#int(config_file['Game']['max_time'])
+threshold=20 #20%
+D_maps=config_file.items("Map")
+D_maps_times=config_file.items("Map_max_time")
+replay_interval=-1
+
+
 
 # NEAT Client Gen Class
 class GenClient(Client):
@@ -86,6 +92,7 @@ class GenClient(Client):
         self.sv=screen_viewer
         self.gamespeed = gamespeed
         self.kill_speed = kill_speed
+        self.scorer=Scorer(self.max_time)
 
 
     def on_registered(self, iface: TMInterface):
@@ -191,7 +198,7 @@ class GenClient(Client):
                 self.L_inputs[self.current_i].append([self.time,self.accelerate,self.brake,self.steer])
                 iface.set_input_state(accelerate=self.accelerate,brake=self.brake,steer=self.steer)
                 #score for moving up to 0.04 per frame
-                self.fitness+=self.speed/10000
+                self.fitness+=self.scorer.score_step(self.speed)
                 self.current_step+=1
                 #update nn situation
                 #input to nn
@@ -266,10 +273,10 @@ class GenClient(Client):
         None
         """
         # Increase this client's fitness
-        self.fitness+=10000/(self.time/1000)
+        self.fitness+=self.scorer.score_checkpoint(self.time)
         if current==target:#case of a finish
             # High reward based on time
-            self.fitness+=100000/(self.time/10000)
+            self.fitness+=self.scorer.score_finish()(self.time)
             #iface.log(str(self.fitness))
             iface.prevent_simulation_finish() # Prevents the game from stopping the simulation after a finished race
             
@@ -352,6 +359,7 @@ class NEATTrainer():
         else:
             checkpoint_infos = checkpoint.split('/')[-1].split('-')
             self.gen = int(checkpoint_infos[-1])
+        self.superviser=Superviser(threshold,D_maps,D_maps_times,replay_interval)
         #super().__init__()
 
 
@@ -423,19 +431,13 @@ class NEATTrainer():
         L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2)) #1/6 de sec en plus par génération
 
         #TODO: ADD superviser call here to change map if good scores
-        threshold=10/100
-        n_good_scores=0
-        for score in L_fit:
-            if score>= 50000:
-                n_good_scores+=1
-        if n_good_scores/len(L_fit)>threshold:
-            raise Exception("succes","Threshold meet")
+        self.superviser.supervise(L_fit)
 
 
         # Update fitness
         for i in range(len(L_fit)):
             genomes[i][1].fitness=L_fit[i]
-
+        #todo: add map to the logger
         # Write generation recap
         self.logger.log('Coords', L_coords, self.gen)
         
