@@ -351,8 +351,9 @@ class MapLoader(Client):
         #iface.log("Ready. Genome id: " + str(self.genome_id))
         #set gamespeed
         iface.set_timeout(5000)
-        iface.execute_command("map "+self.map)
+        iface.execute_command("set skip_map_load_screens true")
         iface.give_up()
+        iface.execute_command("map "+self.map)
         iface.close()
         self.finished=True
     
