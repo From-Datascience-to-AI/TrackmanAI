@@ -6,7 +6,7 @@ Functions to use to build a NEAT system.
 import os
 import keyboard
 import neat
-from utils import ScreenViewer
+from utils import ScreenViewer, Logger
 import pickle as pickle
 import configparser
 import signal
@@ -28,7 +28,7 @@ except ModuleNotFoundError:
 run_config="../models/config.ini"
 model_config="../models/NEAT/config-feedforward"
 model_dir="../models/NEAT"
-checkpoint="../models/NEAT/Checkpoints/checkpoint-83"#None #"../models/NEAT/Checkpoints/checkpoint-0"
+checkpoint=None #"../models/NEAT/Checkpoints/checkpoint-0"
 filename_prefix="../models/NEAT/Checkpoints/checkpoint-"
 
 #training vars
@@ -346,6 +346,7 @@ class NEATTrainer():
     """
     def __init__(self):
         self.filename_prefix = model_dir + "/Checkpoints/checkpoint-"
+        self.logger = Logger(model_dir)
         if checkpoint == None:
             self.gen = 0
         else:
@@ -436,32 +437,13 @@ class NEATTrainer():
             genomes[i][1].fitness=L_fit[i]
 
         # Write generation recap
-        filename = model_dir+'/Coords/'+str(self.gen).zfill(5)+'.pickle'
-        outfile = open(filename,'wb')
-        pickle.dump(L_coords,outfile)
-        outfile.close()
-        filename = model_dir+'/Speeds/'+str(self.gen).zfill(5)+'.pickle'
-        outfile = open(filename,'wb')
-        pickle.dump(L_speeds,outfile)
-        outfile.close()
-        #HERE: add logs
+        self.logger.log('Coords', L_coords, self.gen)
+        
+        self.logger.log('Speeds', L_speeds, self.gen)
 
-        for i in range(len(L_inputs)):
-            filename=model_dir+"/Inputs/"+str(self.gen).zfill(5)+'_'+str(i).zfill(3)
-            l_inputs=L_inputs[i]
-            outfile = open(filename,'a')
-            for j in range(len(l_inputs)):
-                inputs=l_inputs[j]
-                time=inputs[0]
-                accelerate=inputs[1]
-                brake=inputs[2]
-                steer=inputs[3]
-                if accelerate:
-                    outfile.write(str(time)+'press up\n')
-                if brake:
-                    outfile.write(str(time)+'press down\n')
-                outfile.write(str(time)+'steer '+str(steer).zfill(5)+'\n')
-            outfile.close()
+        self.logger.log('Inputs', L_inputs, self.gen)
+
+        self.logger.log('Fitness', L_fit, self.gen)
 
 
     def run(self, no_generations=1000):

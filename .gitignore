@@ -123,3 +123,4 @@ models/NEAT/Checkpoints
 models/NEAT/Coords
 models/NEAT/Inputs
 models/NEAT/Speeds
+models/NEAT/Fitness
