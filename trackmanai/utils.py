@@ -3,6 +3,7 @@ Utils for TrackManAI
 """
 
 # Imports
+import os
 import numpy as np
 import win32gui
 import win32con
@@ -12,6 +13,7 @@ from tminterface.interface import TMInterface
 from tminterface.constants import DEFAULT_SERVER_SIZE
 import time
 import signal
+import pickle as pickle
 
 
 # Classes
@@ -274,8 +276,6 @@ class TMTrainer: #to refactor
             self.gen = int(checkpoint_infos[-1])
 
 
-# Functions
-
 class Superviser:
     def __init__(self,threshold,L_maps,L_map_scores) -> None:
         self.threshold=threshold
@@ -296,11 +296,6 @@ class Superviser:
                 self.current_map=self.L_maps[self.i]
                 self.current_map_score=self.L_map_scores[self.i]
                 LoadMap(self.current_map)
-
-        
-
-
-
 
 
 class MapLoader(Client):
@@ -329,6 +324,79 @@ class MapLoader(Client):
         """
         print(f'deregistered to {iface.server_name}')
 
+
+class Logger():
+    """ Logs informations about the training of a model.
+    """
+    def __init__(self, log_dir):
+        self.log_dir = log_dir
+        # Create folders if necessary
+        if os.path.isdir(log_dir+'/Coords'):
+            print("Log directory already exists, make sure you are not writting logs in an unwanted file.")
+        else:
+            os.mkdir(log_dir+'/Coords')
+            print('Coords directory created!')
+
+        if os.path.isdir(log_dir+'/Fitness'):
+            print("Log directory already exists, make sure you are not writting logs in an unwanted file.")
+        else:
+            os.mkdir(log_dir+'/Fitness')
+            print('Fitness directory created!')
+
+        if os.path.isdir(log_dir+'/Inputs'):
+            print("Log directory already exists, make sure you are not writting logs in an unwanted file.")
+        else:
+            os.mkdir(log_dir+'/Inputs')
+            print('Inputs directory created!')
+
+        if os.path.isdir(log_dir+'/Speeds'):
+            print("Log directory already exists, make sure you are not writting logs in an unwanted file.")
+        else:
+            os.mkdir(log_dir+'/Speeds')
+            print('Speeds directory created!')
+
+    
+    def log(self, log_type, L_data, i):
+        """ Logs informations about a generation/epoch.
+    
+        Parameters
+        ----------
+        log_type: str (Coords - Speeds - Inputs - Fitness)
+        L_data: List (array of data to log)
+        i: int (index of generation/epoch)
+
+        Output
+        ----------
+        None
+        """
+        if log_type in ['Coords', 'Speeds', 'Fitness']:
+            filename = self.log_dir + '/' + log_type + '/' + str(i).zfill(5) + '.pickle'
+            outfile = open(filename, 'wb')
+            pickle.dump(L_data, outfile)
+            outfile.close()
+        elif log_type == 'Inputs':
+            # Have to refine data first
+            for index in range(len(L_data)):
+                filename = self.log_dir + '/' + log_type + '/' + str(i).zfill(5) +'_'+ str(index).zfill(3)
+                l_inputs = L_data[i]
+                outfile = open(filename, 'a')
+                for jndex in range(len(l_inputs)):
+                    inputs = l_inputs[jndex]
+                    time = inputs[0]
+                    accelerate=inputs[1]
+                    brake=inputs[2]
+                    steer=inputs[3]
+                    if accelerate:
+                        outfile.write(str(time)+'press up\n')
+                    if brake:
+                        outfile.write(str(time)+'press down\n')
+                    outfile.write(str(time)+'steer '+str(steer).zfill(5)+'\n')
+                outfile.close()
+        else:
+            raise Exception(f'Log type name exception : log_type unknown ({log_type})')
+
+
+# Functions
 def LoadMap(map):
     client=MapLoader(map)
     buffer_size=DEFAULT_SERVER_SIZE
