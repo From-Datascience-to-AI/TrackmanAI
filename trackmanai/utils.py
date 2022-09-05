@@ -373,71 +373,73 @@ class Logger():
     """ Logs informations about the training of a model.
     """
     def __init__(self, log_dir):
-        self.log_dir = log_dir
-        # Create folders if necessary
-        if os.path.isdir(log_dir+'/Coords'):
+        self.log_dir = log_dir + '/logs/'
+        # Create folder if necessary
+        if os.path.isdir(log_dir+'/logs'):
             print("Log directory already exists, make sure you are not writting logs in an unwanted file.")
         else:
-            os.mkdir(log_dir+'/Coords')
-            print('Coords directory created!')
+            os.mkdir(log_dir+'/logs')
+            print('Log directory created !')
 
-        if os.path.isdir(log_dir+'/Fitness'):
-            print("Log directory already exists, make sure you are not writting logs in an unwanted file.")
-        else:
-            os.mkdir(log_dir+'/Fitness')
-            print('Fitness directory created!')
 
-        if os.path.isdir(log_dir+'/Inputs'):
-            print("Log directory already exists, make sure you are not writting logs in an unwanted file.")
-        else:
-            os.mkdir(log_dir+'/Inputs')
-            print('Inputs directory created!')
-
-        if os.path.isdir(log_dir+'/Speeds'):
-            print("Log directory already exists, make sure you are not writting logs in an unwanted file.")
-        else:
-            os.mkdir(log_dir+'/Speeds')
-            print('Speeds directory created!')
-
-    
-    def log(self, log_type, L_data, i):
+    def log(self, data, i):
         """ Logs informations about a generation/epoch.
     
         Parameters
         ----------
-        log_type: str (Coords - Speeds - Inputs - Fitness)
-        L_data: List (array of data to log)
+        data: dict (dictionnary with several lists (map, inputs, coords, speeds, scores))
         i: int (index of generation/epoch)
 
         Output
         ----------
         None
         """
-        if log_type in ['Coords', 'Speeds', 'Fitness']:
-            filename = self.log_dir + '/' + log_type + '/' + str(i).zfill(5) + '.pickle'
-            outfile = open(filename, 'wb')
-            pickle.dump(L_data, outfile)
-            outfile.close()
-        elif log_type == 'Inputs':
-            # Have to refine data first
-            for index in range(len(L_data)):
-                filename = self.log_dir + '/' + log_type + '/' + str(i).zfill(5) +'_'+ str(index).zfill(3)
-                l_inputs = L_data[i]
-                outfile = open(filename, 'a')
-                for jndex in range(len(l_inputs)):
-                    inputs = l_inputs[jndex]
-                    time = inputs[0]
-                    accelerate=inputs[1]
-                    brake=inputs[2]
-                    steer=inputs[3]
-                    if accelerate:
-                        outfile.write(str(time)+'press up\n')
-                    if brake:
-                        outfile.write(str(time)+'press down\n')
-                    outfile.write(str(time)+'steer '+str(steer).zfill(5)+'\n')
-                outfile.close()
-        else:
-            raise Exception(f'Log type name exception : log_type unknown ({log_type})')
-
+        # Clean inputs
+        L_inputs_clean = clean_inputs(data['inputs'])
+        # Recreate right dict
+        # TODO : add map once superviser is done
+        data_to_log = {
+            'fitness': data['fitness'],
+            'coords': data['coords'],
+            'speeds': data['speeds'],
+            'inputs': L_inputs_clean
+        }
+        # Save dict
+        filename = self.log_dir + str(i).zfill(5) + '.pickle'
+        outfile = open(filename, 'wb')
+        pickle.dump(data_to_log, outfile)
+        outfile.close()
+        
 
 # Functions
+def clean_inputs(inputs_to_clean):
+    """ Cleans inputs.
+
+    Parameters
+    ----------
+    inputs_to_clean: List (list of inputs)
+
+    Output
+    ----------
+    L_inputs_clean: List
+    """
+    L_inputs_clean = []
+    for index in range(len(inputs_to_clean)):
+        l_inputs = inputs_to_clean[index]
+        l_inputs_clean = []
+        for jndex in range(len(l_inputs)):
+            inputs = l_inputs[jndex]
+            inputs_clean = ""
+            time = inputs[0]
+            accelerate=inputs[1]
+            brake=inputs[2]
+            steer=inputs[3]
+            if accelerate:
+                inputs_clean += str(time)+'press up\n'
+            if brake:
+                inputs_clean += str(time)+'press down\n'
+            inputs_clean += str(time)+'steer '+str(steer).zfill(5)+'\n'
+            l_inputs_clean.append(inputs_clean)
+        L_inputs_clean.append(l_inputs_clean)
+
+    return L_inputs_clean
