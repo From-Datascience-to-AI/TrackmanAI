@@ -285,6 +285,7 @@ class Superviser:
         self.D_maps_times=D_maps_times
         self.i=0
         self.current_map=self.D_maps[self.i][1]
+        self.current_map_time=int(self.D_maps_times[self.i][1])
         self.gen_count=0
         self.replay_interval=replay_interval
         self.LoadMap(self.current_map)
@@ -296,14 +297,14 @@ class Superviser:
             if score>= 100000:
                 n_good_scores+=1
         if n_good_scores/len(L_scores)>=self.threshold: #changes map if threshold is exceeded
-            if self.i+1<len(self.L_maps):
+            if self.i+1<len(self.D_maps):
                 self.i+=1
-                self.current_map=self.L_maps[self.i][1]
-                self.current_map_time=self.D_maps_times[self.i][1]
+                self.current_map=self.D_maps[self.i][1]
+                self.current_map_time=int(self.D_maps_times[self.i][1])
                 self.LoadMap(self.current_map)
 
-    def train(self,train_func,L_net,max_time):
-        return train_func(L_net,max_time)
+    def train(self,train_func,client,L_net):
+        return train_func(client(L_net,self.current_map_time))
 
     def LoadMap(self,map):
         client=MapLoader(map)
@@ -354,6 +355,8 @@ class MapLoader(Client):
         iface.execute_command("set skip_map_load_screens true")
         iface.give_up()
         iface.execute_command("map "+self.map)
+        iface.give_up()
+        time.sleep(2)
         iface.close()
         self.finished=True
     

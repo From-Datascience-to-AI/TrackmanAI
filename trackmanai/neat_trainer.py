@@ -28,7 +28,7 @@ except ModuleNotFoundError:
 run_config="../models/config.ini"
 model_config="../models/NEAT/config-feedforward"
 model_dir="../models/NEAT"
-checkpoint="../models/NEAT/Checkpoints/checkpoint-12" #None
+checkpoint="../models/NEAT/Checkpoints/checkpoint-15" #None
 filename_prefix="../models/NEAT/Checkpoints/checkpoint-"
 
 #training vars
@@ -57,7 +57,7 @@ skip_frames = int(config_file['Game']['skip_frames'])
 kill_time = int(config_file['Game']['kill_time'])
 kill_speed = int(config_file['Game']['kill_speed'])
 max_time = 7#int(config_file['Game']['max_time'])
-threshold=20 #20%
+threshold=0.20 #20%
 D_maps=config_file.items("Map")
 D_maps_times=config_file.items("Map_max_time")
 replay_interval=-1
@@ -428,8 +428,8 @@ class NEATTrainer():
         #TODO: check if bug
         #case of bug: launch again the generation
         # Run gen
-        L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2)) #1/6 de sec en plus par génération
-
+        #L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2)) #1/6 de sec en plus par génération
+        L_fit,L_coords,L_speeds,L_inputs=self.superviser.train(self.run_client_gen,GenClient,L_net)
         #TODO: ADD superviser call here to change map if good scores
         self.superviser.supervise(L_fit)
 
@@ -535,3 +535,5 @@ def train_neat():
 
 if __name__ == '__main__':
     train_neat()
+
+#NOTA BENE: for the supervisor to work, the TMInterface window has to be selected when changing maps
