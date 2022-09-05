@@ -430,6 +430,16 @@ class NEATTrainer():
         # Run gen
         #L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2)) #1/6 de sec en plus par génération
         L_fit,L_coords,L_speeds,L_inputs=self.superviser.train(self.run_client_gen,GenClient,L_net)
+        # Save log data before checking whether to change map
+        # TODO : add map when map correctly dealt with in superviser
+        log_data = {
+            'fitness': L_fit,
+            'coords': L_coords,
+            'speeds': L_speeds,
+            'inputs': L_inputs
+        }
+        # Write generation recap
+        self.logger.log(log_data, self.gen-1)
         #TODO: ADD superviser call here to change map if good scores
         self.superviser.supervise(L_fit)
 
@@ -437,15 +447,6 @@ class NEATTrainer():
         # Update fitness
         for i in range(len(L_fit)):
             genomes[i][1].fitness=L_fit[i]
-        #todo: add map to the logger
-        # Write generation recap
-        self.logger.log('Coords', L_coords, self.gen)
-        
-        self.logger.log('Speeds', L_speeds, self.gen)
-
-        self.logger.log('Inputs', L_inputs, self.gen)
-
-        self.logger.log('Fitness', L_fit, self.gen)
 
 
     def run(self, no_generations=1000):
