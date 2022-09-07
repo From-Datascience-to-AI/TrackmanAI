@@ -28,8 +28,7 @@ except ModuleNotFoundError:
 run_config="../models/config.ini"
 model_config="../models/NEAT/config-feedforward"
 model_dir="../models/NEAT"
-checkpoint="../models/NEAT/Checkpoints/checkpoint-15" #None
-filename_prefix="../models/NEAT/Checkpoints/checkpoint-"
+
 
 #training vars
 no_generations=1000
@@ -49,6 +48,10 @@ try:
     screen_viewer = ScreenViewer(n_lines, w, h,window_name)
 except:
     screen_viewer = ScreenViewer(n_lines, w, h,window_name2)
+
+#checkpoints
+checkpoint=config_file['Checkpoint']['checkpoint']
+filename_prefix=config_file['Checkpoint']['filename_prefix']
 
 #simulation vars
 server_name = config_file['Game']['server_name']
