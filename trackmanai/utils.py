@@ -340,6 +340,8 @@ class Scorer:
         return 100000+1000*(self.max_time-time)
 
 class MapLoader(Client):
+    """class responsible to load a map
+    """
     def __init__(self, map):
         super(MapLoader,self).__init__()
         self.map=map
@@ -369,7 +371,7 @@ class MapLoader(Client):
         print(f'deregistered to {iface.server_name}')
 
 
-class Logger():
+class Logger:
     """ Logs informations about the training of a model.
     """
     def __init__(self, log_dir):
@@ -395,7 +397,7 @@ class Logger():
         None
         """
         # Clean inputs
-        L_inputs_clean = clean_inputs(data['inputs'])
+        L_inputs_clean = self.clean_inputs(data['inputs'])
         # Recreate right dict
         # TODO : add map once superviser is done
         data_to_log = {
@@ -410,36 +412,73 @@ class Logger():
         pickle.dump(data_to_log, outfile)
         outfile.close()
         
+    def clean_inputs(inputs_to_clean):
+        """ Cleans inputs.
 
-# Functions
-def clean_inputs(inputs_to_clean):
-    """ Cleans inputs.
+        Parameters
+        ----------
+        inputs_to_clean: List (list of inputs)
 
-    Parameters
-    ----------
-    inputs_to_clean: List (list of inputs)
+        Output
+        ----------
+        L_inputs_clean: List
+        """
+        L_inputs_clean = []
+        for index in range(len(inputs_to_clean)):
+            l_inputs = inputs_to_clean[index]
+            l_inputs_clean = []
+            for jndex in range(len(l_inputs)):
+                inputs = l_inputs[jndex]
+                inputs_clean = ""
+                time = inputs[0]
+                accelerate=inputs[1]
+                brake=inputs[2]
+                steer=inputs[3]
+                if accelerate:
+                    inputs_clean += str(time)+'press up\n'
+                if brake:
+                    inputs_clean += str(time)+'press down\n'
+                inputs_clean += str(time)+'steer '+str(steer).zfill(5)+'\n'
+                l_inputs_clean.append(inputs_clean)
+            L_inputs_clean.append(l_inputs_clean)
 
-    Output
-    ----------
-    L_inputs_clean: List
+        return L_inputs_clean
+
+class reporter:
+    """ report at the end of a generation stats about training
     """
-    L_inputs_clean = []
-    for index in range(len(inputs_to_clean)):
-        l_inputs = inputs_to_clean[index]
-        l_inputs_clean = []
-        for jndex in range(len(l_inputs)):
-            inputs = l_inputs[jndex]
-            inputs_clean = ""
-            time = inputs[0]
-            accelerate=inputs[1]
-            brake=inputs[2]
-            steer=inputs[3]
-            if accelerate:
-                inputs_clean += str(time)+'press up\n'
-            if brake:
-                inputs_clean += str(time)+'press down\n'
-            inputs_clean += str(time)+'steer '+str(steer).zfill(5)+'\n'
-            l_inputs_clean.append(inputs_clean)
-        L_inputs_clean.append(l_inputs_clean)
+    def __init__(self):
+        self.n_genomes=0
+        self.Ln_checkpoints=[]
+        self.Lt_checkpoint=[]
+        self.Lt_finish=[]
+        self.gen=0
+    
+    def checkpoint_crossed(self,n_checkpoint,t):
+        if len(self.Ln_checkpoints)<=n_checkpoint:
+            for i in range(n_checkpoint-len(self.Ln_checkpoints)):
+                self.Ln_checkpoints.append(0)
+                self.Lt_checkpoint.append([])
+        self.Ln_checkpoints[n_checkpoint]+=1
+        self.Lt_checkpoint[n_checkpoint].append(t)
 
-    return L_inputs_clean
+    def finish_crossed(self,t):
+        self.Lt_finish.append(t)
+
+    def report(self):
+        print(f"generation {self.gen}")
+        print(f"number of genomes: {self.n_genomes}")
+        for i in range(len(self.Ln_checkpoints)):
+            print(f"checkpoint {i} crossed {self.Ln_checkpoints[i]} times")
+            print(f"checkpoint {i} average crossing time: {sum(self.Lt_checkpoints[i])/len(self.Lt_checkpoints[i])}")
+            print(f"best checkpoint {i} crossing time: {min(self.Lt_checkpoint[i])}")
+        print(f"number of finish: {len(self.Lt_finish)}")
+        print(f"average finish time: {sum(self.t_finish)/len(self.Lt_finish)}")
+        print(f"best finish time: {min(Lt_finish)}")
+
+    def next_gen(self):
+        self.n_genomes=0
+        self.Ln_checkpoints=[]
+        self.Lt_checkpoint=[]
+        self.Lt_finish=[]
+        self.gen+=1
