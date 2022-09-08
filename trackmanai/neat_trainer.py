@@ -6,7 +6,7 @@ Functions to use to build a NEAT system.
 import os
 import keyboard
 import neat
-from utils import ScreenViewer, Logger, Superviser, Scorer
+from utils import ScreenViewer, Logger, Superviser, Scorer, Reporter
 import pickle as pickle
 import configparser
 import signal
@@ -96,7 +96,7 @@ class GenClient(Client):
         self.gamespeed = gamespeed
         self.kill_speed = kill_speed
         self.scorer=Scorer(self.max_time)
-
+        self.reporter=Reporter()
 
     def on_registered(self, iface: TMInterface):
         """ A callback that the client has registered to a TMInterface instance.
@@ -277,8 +277,10 @@ class GenClient(Client):
         """
         # Increase this client's fitness
         self.fitness+=self.scorer.score_checkpoint(self.time)
+        self.reporter.checkpoint_crossed(current, self.time)
         if current==target:#case of a finish
             # High reward based on time
+            self.reporter.finish_crossed(self.time)
             self.fitness+=self.scorer.score_finish(self.time)
             #iface.log(str(self.fitness))
             iface.prevent_simulation_finish() # Prevents the game from stopping the simulation after a finished race
@@ -363,7 +365,7 @@ class NEATTrainer():
             checkpoint_infos = checkpoint.split('/')[-1].split('-')
             self.gen = int(checkpoint_infos[-1])
         self.superviser=Superviser(threshold,D_maps,D_maps_times,replay_interval)
-        #super().__init__()
+
 
 
     def run_client_gen(self, client: Client, buffer_size=DEFAULT_SERVER_SIZE):
@@ -403,7 +405,7 @@ class NEATTrainer():
             time.sleep(0)
         iface.close()
 
-        return client.L_fit,client.L_coords,client.L_speeds,client.L_inputs
+        return client.L_fit,client.L_coords,client.L_speeds,client.L_inputs,client.reporter
 
 
     def eval_genomes(self, genomes, config):
@@ -431,8 +433,8 @@ class NEATTrainer():
         #TODO: check if bug
         #case of bug: launch again the generation
         # Run gen
-        #L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2)) #1/6 de sec en plus par génération
-        L_fit,L_coords,L_speeds,L_inputs=self.superviser.train(self.run_client_gen,GenClient,L_net)
+        L_fit,L_coords,L_speeds,L_inputs,reporter=self.superviser.train(self.run_client_gen,GenClient,L_net)
+        reporter.report(self.gen)
         # Save log data before checking whether to change map
         # TODO : add map when map correctly dealt with in superviser
         log_data = {

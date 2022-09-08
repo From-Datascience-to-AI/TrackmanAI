@@ -412,7 +412,7 @@ class Logger:
         pickle.dump(data_to_log, outfile)
         outfile.close()
         
-    def clean_inputs(inputs_to_clean):
+    def clean_inputs(self,inputs_to_clean):
         """ Cleans inputs.
 
         Parameters
@@ -444,41 +444,47 @@ class Logger:
 
         return L_inputs_clean
 
-class reporter:
+class Reporter:
     """ report at the end of a generation stats about training
     """
     def __init__(self):
         self.n_genomes=0
-        self.Ln_checkpoints=[]
+        self.Ln_checkpoint=[]
         self.Lt_checkpoint=[]
         self.Lt_finish=[]
-        self.gen=0
     
     def checkpoint_crossed(self,n_checkpoint,t):
-        if len(self.Ln_checkpoints)<=n_checkpoint:
-            for i in range(n_checkpoint-len(self.Ln_checkpoints)):
-                self.Ln_checkpoints.append(0)
+        n_checkpoint=n_checkpoint-1
+        if len(self.Ln_checkpoint)<=n_checkpoint:
+            for i in range(n_checkpoint-len(self.Ln_checkpoint)+1):
+                self.Ln_checkpoint.append(0)
                 self.Lt_checkpoint.append([])
-        self.Ln_checkpoints[n_checkpoint]+=1
+        self.Ln_checkpoint[n_checkpoint]+=1
         self.Lt_checkpoint[n_checkpoint].append(t)
 
     def finish_crossed(self,t):
         self.Lt_finish.append(t)
 
-    def report(self):
+    def report(self,gen):
+        #TODO: format time mm:ss:tt
+        #TODO: include number of genomes
+        #TODO: include statistics usefull
+        #TODO: include in superviser the checkpoints and finish
+        #TODO: nicer prints
+        self.gen=gen
         print(f"generation {self.gen}")
         print(f"number of genomes: {self.n_genomes}")
-        for i in range(len(self.Ln_checkpoints)):
-            print(f"checkpoint {i} crossed {self.Ln_checkpoints[i]} times")
-            print(f"checkpoint {i} average crossing time: {sum(self.Lt_checkpoints[i])/len(self.Lt_checkpoints[i])}")
-            print(f"best checkpoint {i} crossing time: {min(self.Lt_checkpoint[i])}")
+        for i in range(len(self.Ln_checkpoint)-1):
+            if self.Lt_checkpoint[i]:#safeguard
+                print(f"checkpoint {i+1} crossed {self.Ln_checkpoint[i]} times")
+                print(f"checkpoint {i+1} average crossing time: {(sum(self.Lt_checkpoint[i])/len(self.Lt_checkpoint[i]))/1000}")
+                print(f"best checkpoint {i+1} crossing time: {min(self.Lt_checkpoint[i])/1000}")
         print(f"number of finish: {len(self.Lt_finish)}")
-        print(f"average finish time: {sum(self.t_finish)/len(self.Lt_finish)}")
-        print(f"best finish time: {min(Lt_finish)}")
+        print(f"average finish time: {(sum(self.Lt_finish)/len(self.Lt_finish))/1000}")
+        print(f"best finish time: {min(self.Lt_finish)/1000}")
 
     def next_gen(self):
         self.n_genomes=0
         self.Ln_checkpoints=[]
         self.Lt_checkpoint=[]
         self.Lt_finish=[]
-        self.gen+=1
