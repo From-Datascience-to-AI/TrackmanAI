@@ -304,7 +304,9 @@ class Superviser:
                 self.LoadMap(self.current_map)
 
     def train(self,train_func,client,L_net):
-        return train_func(client(L_net,self.current_map_time))
+        L_fit,L_coords,L_speeds,L_inputs,reporter=train_func(client(L_net,self.current_map_time))
+        reporter.max_time=self.current_map_time
+        return L_fit,L_coords,L_speeds,L_inputs,reporter
 
     def LoadMap(self,map):
         client=MapLoader(map)
@@ -451,6 +453,7 @@ class Reporter:
         self.Ln_checkpoint=[]
         self.Lt_checkpoint=[]
         self.Lt_finish=[]
+        self.max_time=0
     
     def checkpoint_crossed(self,n_checkpoint,t):
         n_checkpoint=n_checkpoint-1
@@ -474,6 +477,7 @@ class Reporter:
         self.n_genomes=n_genomes
         print(f"generation {self.gen}")
         print(f"number of genomes: {self.n_genomes}")
+        print(f"max time: {self.max_time}")
         for i in range(len(self.Ln_checkpoint)-1):
             if self.Lt_checkpoint[i]:#safeguard
                 print(f"checkpoint {i+1} crossed {self.Ln_checkpoint[i]} times")
