@@ -305,6 +305,9 @@ class Superviser:
 
     def train(self,train_func,client,L_net):
         L_fit,L_coords,L_speeds,L_inputs,reporter=train_func(client(L_net,self.current_map_time))
+        L_fit_check=sorted(L_fit)
+        if L_fit_check[50]<0.003:#bug protection
+            raise Exception("issue: too many scores are 0")
         reporter.max_time=self.current_map_time
         reporter.map=self.D_maps[self.i][0]
         return L_fit,L_coords,L_speeds,L_inputs,reporter
