@@ -434,7 +434,7 @@ class NEATTrainer():
         #case of bug: launch again the generation
         # Run gen
         L_fit,L_coords,L_speeds,L_inputs,reporter=self.superviser.train(self.run_client_gen,GenClient,L_net)
-        reporter.report(self.gen)
+        reporter.report(self.gen,len(L_fit))
         # Save log data before checking whether to change map
         # TODO : add map when map correctly dealt with in superviser
         log_data = {

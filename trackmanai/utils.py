@@ -448,7 +448,6 @@ class Reporter:
     """ report at the end of a generation stats about training
     """
     def __init__(self):
-        self.n_genomes=0
         self.Ln_checkpoint=[]
         self.Lt_checkpoint=[]
         self.Lt_finish=[]
@@ -465,13 +464,14 @@ class Reporter:
     def finish_crossed(self,t):
         self.Lt_finish.append(t)
 
-    def report(self,gen):
+    def report(self,gen,n_genomes):
         #TODO: format time mm:ss:tt
         #TODO: include number of genomes
         #TODO: include statistics usefull
         #TODO: include in superviser the checkpoints and finish
         #TODO: nicer prints
         self.gen=gen
+        self.n_genomes=n_genomes
         print(f"generation {self.gen}")
         print(f"number of genomes: {self.n_genomes}")
         for i in range(len(self.Ln_checkpoint)-1):
