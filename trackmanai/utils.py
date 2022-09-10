@@ -480,8 +480,9 @@ class Reporter:
                 print(f"checkpoint {i+1} average crossing time: {(sum(self.Lt_checkpoint[i])/len(self.Lt_checkpoint[i]))/1000}")
                 print(f"best checkpoint {i+1} crossing time: {min(self.Lt_checkpoint[i])/1000}")
         print(f"number of finish: {len(self.Lt_finish)}")
-        print(f"average finish time: {(sum(self.Lt_finish)/len(self.Lt_finish))/1000}")
-        print(f"best finish time: {min(self.Lt_finish)/1000}")
+        if len(self.Lt_finish): #case of a finish
+            print(f"average finish time: {(sum(self.Lt_finish)/len(self.Lt_finish))/1000}")
+            print(f"best finish time: {min(self.Lt_finish)/1000}")
 
     def next_gen(self):
         self.n_genomes=0
