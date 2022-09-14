@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 #goal of this script: testing the screenshot part and mesuring the time taken
 w=640
 h=480
-
+l=400
 class ScreenViewer:
     """ Asynchronously captures screens of a window. Provides functions for accessing the captured screen.
     (from https://nicholastsmith.wordpress.com/2017/08/10/poe-ai-part-4-real-time-screen-capture-and-plumbing/?fbclid=IwAR3ZHfVY2oPr1kqhq_o4EthijXh1GLDoK2FYw3bWReRWMUEBWTB8_jhwd1Q)
@@ -31,6 +31,7 @@ class ScreenViewer:
         self.w = w
         self.h = h
         self.L_pix_lines=self.get_pix_lines(n_lines)
+        self.L_pix_lines=self.get_pix_lines2(n_lines)
         self.L_indexT=[tuple(np.array(line)[:,::-1].T.tolist()) for line in self.L_pix_lines]
         if not self.getHWND(wname):
             raise Exception("HWND is none. HWND not called or invalid window name provided.")
@@ -184,6 +185,10 @@ class ScreenViewer:
                 line.reverse()
             return line ## Finally, return the line!
     
+    def getLine2(self,x1,y1,x2,y2,l):
+        return [(int(x1+i*(x2-x1)/l),int(y1+i*(y2-y1)/l)) for i in range(l+1)]
+
+
     def intersect(self,indexT,im):
         """ Gets the intersection index between the line and a different color object (i.e. a wall)
 
@@ -244,6 +249,16 @@ class ScreenViewer:
         for i in range(len(L_end_points)):
             L_pix_lines.append(self.getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
         return L_pix_lines
+
+    def get_pix_lines2(self,n_lines):
+        """ Gets every raycasts on the image
+        """
+        c,L_end_points=self.get_end_points(n_lines)
+        L_pix_lines=[]
+        for i in range(len(L_end_points)):
+            L_pix_lines.append(self.getLine2(c[0],c[1],L_end_points[i][0],L_end_points[i][1],l))
+        return L_pix_lines
+
 
     def getScreenIntersect(self):
         im=self.getScreenImg()

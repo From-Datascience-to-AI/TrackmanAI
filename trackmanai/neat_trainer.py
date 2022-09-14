@@ -29,7 +29,6 @@ run_config="../models/config.ini"
 model_config="../models/NEAT/config-feedforward"
 model_dir="../models/NEAT"
 
-
 #training vars
 no_generations=1000
 
@@ -41,13 +40,14 @@ config_file.read(run_config)
 #screenshots vars
 w = int(config_file['Window']['w'])
 h = int(config_file['Window']['h'])
+l = int(config_file['Window']['l'])
 window_name = config_file['Window']['window_name']
 window_name2 = config_file['Window']['window_name2']
 n_lines = int(config_file['Image']['n_lines'])
 try:
-    screen_viewer = ScreenViewer(n_lines, w, h,window_name)
+    screen_viewer = ScreenViewer(n_lines, w, h, l,window_name)
 except:
-    screen_viewer = ScreenViewer(n_lines, w, h,window_name2)
+    screen_viewer = ScreenViewer(n_lines, w, h, l,window_name2)
 
 #checkpoints
 checkpoint=config_file['Checkpoint']['checkpoint']
@@ -240,7 +240,6 @@ class GenClient(Client):
                             #self.sv.Stop()
                             iface.close()
                             self.finished=True
-
 
     def on_simulation_begin(self, iface):
         """ Called when a new simulation session is started (when validating a replay).

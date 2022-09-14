@@ -10,6 +10,7 @@ from time import time
 import multiprocessing
 from functools import partial
 
+l=300
 
 
 class ScreenViewer:
@@ -31,7 +32,9 @@ class ScreenViewer:
         self.w = w
         self.h = h
         self.L_pix_lines=self.get_pix_lines(n_lines)
+        self.L_pix_lines2=self.get_pix_lines2(n_lines)
         self.L_indexT=[tuple(np.array(line)[:,::-1].T.tolist()) for line in self.L_pix_lines]
+        self.L_indexT2=[tuple(np.array(line)[:,::-1].T.tolist()) for line in self.L_pix_lines2]
         self.getHWND(wname)
 
     def getHWND(self, wname):
@@ -184,6 +187,8 @@ class ScreenViewer:
                 line.reverse()
             return line ## Finally, return the line!
 
+    def getLine2(self,x1,y1,x2,y2,l):
+        return [(int(x1+i*(x2-x1)/l),int(y1+i*(y2-y1)/l)) for i in range(l+1)]
 
     def intersect(self,im,line):
         """ Gets the intersection index between the line and a different color object (i.e. a wall)
@@ -205,7 +210,7 @@ class ScreenViewer:
         mask.append(True)#end of axis 1 is True
         return 2*mask.index(True)/len(line)-1
 
-    def intersect2(self,indexT,im):
+    def intersect2(self,L_indexT,im):
         """ Gets the intersection index between the line and a different color object (i.e. a wall)
 
         Parameters
@@ -217,7 +222,7 @@ class ScreenViewer:
         ----------
         i: int (index on the line that intersects a different object)
         """
-        pixels=im[indexT]
+        pixels=im[L_indexT]
         pixels=np.sum(pixels,axis=1)/len(im[0][0])
         mask=pixels<30
         mask=mask.tolist()
@@ -237,16 +242,7 @@ class ScreenViewer:
     def get_raycast2(self,im,L_indexT):
         """ Gets every (corrected) raycasts on the image
         """
-        #impossible to use numpy because of the len of lines not equal
-        
-        #return list(map(partial(self.intersect2,im=im),L_indexT)) #to test next
-        L_intersect_normed=[]
-        #append=L_intersect_normed.append to test next [self.intersect2(indexT,im) for iter in L_indexT]
-        #try using also return[]
-        for indexT in L_indexT:
-            inter=self.intersect2(indexT,im)
-            L_intersect.append(inter)
-        return L_intersect_normed
+        return self.intersect2(L_indexT,im)
 
     def get_pix_lines(self,n_lines):
         """ Gets every raycasts on the image
@@ -255,6 +251,15 @@ class ScreenViewer:
         L_pix_lines=[]
         for i in range(len(L_end_points)):
             L_pix_lines.append(self.getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+        return L_pix_lines
+
+    def get_pix_lines2(self,n_lines):
+        """ Gets every raycasts on the image
+        """
+        c,L_end_points=self.get_end_points(n_lines)
+        L_pix_lines=[]
+        for i in range(len(L_end_points)):
+            L_pix_lines.append(self.getLine2(c[0],c[1],L_end_points[i][0],L_end_points[i][1],l))
         return L_pix_lines
 
     def getScreenIntersect(self):

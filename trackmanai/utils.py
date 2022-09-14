@@ -21,7 +21,7 @@ class ScreenViewer:
     """ Asynchronously captures screens of a window. Provides functions for accessing the captured screen.
     (from https://nicholastsmith.wordpress.com/2017/08/10/poe-ai-part-4-real-time-screen-capture-and-plumbing/?fbclid=IwAR3ZHfVY2oPr1kqhq_o4EthijXh1GLDoK2FYw3bWReRWMUEBWTB8_jhwd1Q)
     """
-    def __init__(self, n_lines, w, h,wname):
+    def __init__(self, n_lines, w, h, l,wname):
         #self.mut = Lock()
         self.hwnd = None
         self.its = None         #Time stamp of last image 
@@ -35,6 +35,7 @@ class ScreenViewer:
         self.bl, self.bt, self.br, self.bb = 0, 0, 0, 0
         self.w = w
         self.h = h
+        self.l=l
         self.L_pix_lines=self.get_pix_lines(n_lines)
         self.L_indexT=[tuple(np.array(line)[:,::-1].T.tolist()) for line in self.L_pix_lines]
         if not self.getHWND(wname):
@@ -151,44 +152,9 @@ class ScreenViewer:
         return start_point,L_end_points
 
 
-    def getLine(self,x1,y1,x2,y2):
-        """ Compute a straight line from (x1, y1) to (x2, y2)
-        (based on https://stackoverflow.com/questions/25837544/get-all-points-of-a-straight-line-in-python?fbclid=IwAR2y-tW6Qmk_1I28KQRF2WslyfmXAFhlQ3_2l0tKL8RQ7qAIj-f6QgBE-NM)
+    def getLine(self,x1,y1,x2,y2,l):
+        return [(int(x1+i*(x2-x1)/l),int(y1+i*(y2-y1)/l)) for i in range(l+1)]
 
-        Parameters
-        ----------
-        x1: int
-        y1: int
-        x2: int
-        y2: int
-
-        Output
-        ----------
-        line: Array([int, int]) (each point from (x1, y1) to (x2, y2))
-        """
-        if x1==x2: ## Perfectly horizontal line, can be solved easily
-            return [[int(x1),int(i)] for i in range(y1,y2,int(abs(y2-y1)/(y2-y1)))]
-        else: ## More of a problem, ratios can be used instead
-            x_inv=False
-            if x1>x2: ## If the line goes "backwards", flip the positions, to go "forwards" down it.
-                x=x1
-                x1=x2
-                x2=x
-                y=y1
-                y1=y2
-                y2=y
-                x_inv=True
-            slope=(y2-y1)/(x2-x1) ## Calculate the slope of the line
-            line=[]
-            i=0
-            while x1+i < x2: ## Keep iterating until the end of the line is reached
-                i+=1
-                x_end=x1+i
-                y_end=y1+slope*i
-                line.append([int(x_end),int(y_end)]) ## Add the next point on the line
-            if x_inv:
-                line.reverse()
-            return line ## Finally, return the line!
 
     def intersect(self,indexT,im):
         """ Gets the intersection index between the line and a different color object (i.e. a wall)
@@ -229,7 +195,7 @@ class ScreenViewer:
         c,L_end_points=self.get_end_points(n_lines)
         L_pix_lines=[]
         for i in range(len(L_end_points)):
-            L_pix_lines.append(self.getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+            L_pix_lines.append(self.getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1],self.l))
         return L_pix_lines
 
     def getScreenIntersect(self):
@@ -499,3 +465,4 @@ class Reporter:
         self.Ln_checkpoints=[]
         self.Lt_checkpoint=[]
         self.Lt_finish=[]
+
