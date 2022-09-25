@@ -190,7 +190,7 @@ class ScreenViewer:
     def getLine2(self,x1,y1,x2,y2,l):
         return [(int(x1+i*(x2-x1)/l),int(y1+i*(y2-y1)/l)) for i in range(l+1)]
 
-    def intersect(self,im,line):
+    def intersect(self,indexT,im):
         """ Gets the intersection index between the line and a different color object (i.e. a wall)
 
         Parameters
@@ -202,47 +202,59 @@ class ScreenViewer:
         ----------
         i: int (index on the line that intersects a different object)
         """
-        indexT=np.array(line)[:,::-1].T.tolist()
         pixels=im[indexT]
-        pixels=np.sum(pixels,axis=1)/len(im[0][0])
-        mask=pixels<30
-        mask=mask.tolist()
-        mask.append(True)#end of axis 1 is True
-        return 2*mask.index(True)/len(line)-1
-
-    def intersect2(self,L_indexT,im):
-        """ Gets the intersection index between the line and a different color object (i.e. a wall)
-
-        Parameters
-        ----------
-        im: np.ndarray (screen image)
-        line: Array([int, int])
-
-        Output
-        ----------
-        i: int (index on the line that intersects a different object)
-        """
-        pixels=im[L_indexT]
         pixels=np.sum(pixels,axis=1)/len(im[0][0])
         mask=pixels<30
         mask=mask.tolist()
         mask.append(True)#end of axis 1 is True
         return 2*mask.index(True)/len(indexT[0])-1
 
-    def get_raycast(self,im,L_pix_lines):
+    def intersect2(self,indexT,im):
+        """ Gets the intersection index between the line and a different color object (i.e. a wall)
+
+        Parameters
+        ----------
+        im: np.ndarray (screen image)
+        line: Array([int, int])
+
+        Output
+        ----------
+        i: int (index on the line that intersects a different object)
+        """
+        pixels=im[indexT]
+        pixels=np.sum(pixels,axis=1)/len(im[0][0])
+        mask=pixels<30
+        mask=mask.tolist()
+        mask.append(True)#end of axis 1 is True
+        return 2*mask.index(True)/len(indexT[0])-1
+
+    def get_raycast(self,im,L_indexT):
         """ Gets every (corrected) raycasts on the image
         """
         #impossible to use numpy because of the len of lines not equal
+        
+        #return list(map(partial(self.intersect2,im=im),L_indexT)) #to test next
         L_intersect_normed=[]
-        for i in range(len(L_pix_lines)):
-            inter=self.intersect(im,L_pix_lines[i])
+        #append=L_intersect_normed.append to test next [self.intersect2(indexT,im) for iter in L_indexT]
+        #try using also return[]
+        for indexT in L_indexT:
+            inter=self.intersect(indexT,im)
             L_intersect_normed.append(inter)
         return L_intersect_normed
 
     def get_raycast2(self,im,L_indexT):
         """ Gets every (corrected) raycasts on the image
         """
-        return self.intersect2(L_indexT,im)
+        #impossible to use numpy because of the len of lines not equal
+        
+        #return list(map(partial(self.intersect2,im=im),L_indexT)) #to test next
+        L_intersect_normed=[]
+        #append=L_intersect_normed.append to test next [self.intersect2(indexT,im) for iter in L_indexT]
+        #try using also return[]
+        for indexT in L_indexT:
+            inter=self.intersect2(indexT,im)
+            L_intersect_normed.append(inter)
+        return L_intersect_normed
 
     def get_pix_lines(self,n_lines):
         """ Gets every raycasts on the image
@@ -272,7 +284,7 @@ class ScreenViewer:
         im=self.getScreenImg()
         b=time()-a
         a=time()
-        L_intersect=self.get_raycast(im,self.L_pix_lines)
+        L_intersect=self.get_raycast(im,self.L_indexT)
         c=time()-a
         return L_intersect,[b,c]
 
@@ -281,14 +293,14 @@ class ScreenViewer:
         im=self.getScreenImg()
         b=time()-a
         a=time()
-        L_intersect=self.get_raycast2(im,self.L_indexT)
+        L_intersect=self.get_raycast2(im,self.L_indexT2)
         c=time()-a
         return L_intersect,[b,c]
 
 
 if __name__=="__main__":
     #TODO: check identical results
-    sv=ScreenViewer(20,640,480,'TrackMania United Forever (TMInterface 1.2.0)')
+    sv=ScreenViewer(20,640,480,'TrackMania United Forever (TMInterface 1.3.1)')
     print('Press z to begin.')
     keyboard.wait('z')
     L_times=[]
