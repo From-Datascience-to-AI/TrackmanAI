@@ -21,7 +21,7 @@ class ScreenViewer:
     """ Asynchronously captures screens of a window. Provides functions for accessing the captured screen.
     (from https://nicholastsmith.wordpress.com/2017/08/10/poe-ai-part-4-real-time-screen-capture-and-plumbing/?fbclid=IwAR3ZHfVY2oPr1kqhq_o4EthijXh1GLDoK2FYw3bWReRWMUEBWTB8_jhwd1Q)
     """
-    def __init__(self, n_lines, w, h, l,wname):
+    def __init__(self, n_lines, w, h, nppl,wname):
         #self.mut = Lock()
         self.hwnd = None
         self.its = None         #Time stamp of last image 
@@ -35,7 +35,7 @@ class ScreenViewer:
         self.bl, self.bt, self.br, self.bb = 0, 0, 0, 0
         self.w = w
         self.h = h
-        self.l=l
+        self.nppl=nppl
         self.L_pix_lines=self.get_pix_lines(n_lines)
         self.L_indexT=[tuple(np.array(line)[:,::-1].T.tolist()) for line in self.L_pix_lines]
         if not self.getHWND(wname):
@@ -155,8 +155,26 @@ class ScreenViewer:
     def getLine(self,x1,y1,x2,y2,l):
         return [(int(x1+i*(x2-x1)/l),int(y1+i*(y2-y1)/l)) for i in range(l+1)]
 
-
     def intersect(self,indexT,im):
+        """ Gets the intersection index between the line and a different color object (i.e. a wall)
+
+        Parameters
+        ----------
+        im: np.ndarray (screen image)
+        line: Array([int, int])
+
+        Output
+        ----------
+        i: int (index on the line that intersects a different object)
+        """
+        pixels=im[indexT]
+        pixels=np.sum(pixels,axis=1)/len(im[0][0])
+        mask=pixels<30
+        mask=mask.tolist()
+        mask.append(True)#end of axis 1 is True
+        return mask.index(True)
+
+    def intersect_normed(self,indexT,im):
         """ Gets the intersection index between the line and a different color object (i.e. a wall)
 
         Parameters
@@ -178,14 +196,18 @@ class ScreenViewer:
     def get_raycast(self,im,L_indexT):
         """ Gets every (corrected) raycasts on the image
         """
-        #impossible to use numpy because of the len of lines not equal
-        
-        #return list(map(partial(self.intersect2,im=im),L_indexT)) #to test next
-        L_intersect_normed=[]
-        #append=L_intersect_normed.append to test next [self.intersect2(indexT,im) for iter in L_indexT]
-        #try using also return[]
+        L_intersect=[]
         for indexT in L_indexT:
             inter=self.intersect(indexT,im)
+            L_intersect.append(inter)
+        return L_intersect
+
+    def get_raycast_normed(self,im,L_indexT):
+        """ Gets every (corrected) raycasts on the image
+        """
+        L_intersect_normed=[]
+        for indexT in L_indexT:
+            inter=self.intersect_normed(indexT,im)
             L_intersect_normed.append(inter)
         return L_intersect_normed
 
@@ -195,20 +217,31 @@ class ScreenViewer:
         c,L_end_points=self.get_end_points(n_lines)
         L_pix_lines=[]
         for i in range(len(L_end_points)):
-            L_pix_lines.append(self.getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1],self.l))
+            L_pix_lines.append(self.getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1],self.nppl))
         return L_pix_lines
 
     def getScreenIntersect(self):
         im=self.getScreenImg()
-        L_intersect=self.get_raycast(im,self.L_indexT)
+        L_intersect=self.get_raycast_normed(im,self.L_indexT)
         return L_intersect
+
+    def getScreenIntersect_forplot(self):
+        im=self.getScreenImg()
+        L_intersect=self.get_raycast(im,self.L_indexT)
+        L_points=[]
+        for i in range(len(L_intersect)):
+            if L_intersect[i]<self.nppl:
+                L_points.append([self.L_pix_lines[i][0],self.L_pix_lines[i][L_intersect[i]]])
+            else:
+                L_points.append([self.L_pix_lines[i][0],self.L_pix_lines[i][-1]])
+        return L_points,im
 
     def getScreenIntersect_timed(self):
         a=time()
         im=self.getScreenImg()
         b=time()-a
         a=time()
-        L_intersect=self.get_raycast(im,self.L_indexT)
+        L_intersect=self.get_raycast_normed(im,self.L_indexT)
         c=time()-a
         return L_intersect,[b,c]
 
