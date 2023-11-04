@@ -6,13 +6,16 @@ Functions to use to build a NEAT system.
 import time
 import keyboard
 import neat
-from utils import *
+from utils import ScreenViewer, Logger, Superviser, Scorer, Reporter
 import pickle as pickle
 import configparser
 import signal
 from tminterface.client import Client
 from tminterface.interface import TMInterface
 from tminterface.constants import DEFAULT_SERVER_SIZE
+import time
+import numpy as np
+
 
 # In order to visualize the training net, you need to copy visualize.py file into the NEAT directory (you can find it in the NEAT repo)
 # Because of the licence, I am not going to copy it to my github repository
@@ -22,16 +25,58 @@ try:
 except ModuleNotFoundError:
     print('Missing visualize.py file.')
 
+#paths
+run_config="../models/config.ini"
+model_config="../models/NEAT/config-feedforward"
+model_dir="../models/NEAT"
+
+#training vars
+no_generations=1000
+
+#config
+config_file = configparser.ConfigParser()
+config_file.read(run_config)
+
+#global vars from config file
+#screenshots vars
+w = int(config_file['Window']['w'])
+h = int(config_file['Window']['h'])
+l = int(config_file['Window']['l'])
+window_name = config_file['Window']['window_name']
+window_name2 = config_file['Window']['window_name2']
+n_lines = int(config_file['Image']['n_lines'])
+try:
+    screen_viewer = ScreenViewer(n_lines, w, h, l,window_name)
+except:
+    screen_viewer = ScreenViewer(n_lines, w, h, l,window_name2)
+
+#checkpoints
+checkpoint=config_file['Checkpoint']['checkpoint']
+filename_prefix=config_file['Checkpoint']['filename_prefix']
+
+#simulation vars
+server_name = config_file['Game']['server_name']
+gamespeed = int(config_file['Game']['gamespeed'])
+skip_frames = int(config_file['Game']['skip_frames'])
+kill_time = int(config_file['Game']['kill_time'])
+kill_speed = int(config_file['Game']['kill_speed'])
+max_time = 7#int(config_file['Game']['max_time'])
+threshold=0.20 #20%
+D_maps=config_file.items("Map")
+D_maps_times=config_file.items("Map_max_time")
+replay_interval=-1
+
+
 
 # NEAT Client Gen Class
 class GenClient(Client):
     """ Class to perform a generation step using tminterface.
     """
-    def __init__(self, L_net, max_time, kill_time, sv, skip_frames, wn, gs, ks):
+    def __init__(self, L_net,max_time2):
         super(GenClient,self).__init__()
         self.init_step=True
         self.fitness=0
-        self.max_time=max_time*1000
+        self.max_time=max_time2*1000
         self.kill_time=kill_time*1000
         self.current_i=0
         self.net=L_net[0]
@@ -48,11 +93,11 @@ class GenClient(Client):
         self.ready_max_steps=60
         self.ready_current_steps=0
         self.finished=False
-        self.sv=sv
-        self.sv.getHWND(wn)
-        self.gamespeed = gs
-        self.kill_speed = ks
-
+        self.sv=screen_viewer
+        self.gamespeed = gamespeed
+        self.kill_speed = kill_speed
+        self.scorer=Scorer(self.max_time)
+        self.reporter=Reporter()
 
     def on_registered(self, iface: TMInterface):
         """ A callback that the client has registered to a TMInterface instance.
@@ -63,6 +108,8 @@ class GenClient(Client):
         iface.set_timeout(5000)
         if self.gamespeed!=1.0:
             iface.set_speed(self.gamespeed)
+        iface.execute_command("set sim_priority realtime")
+        #iface.execute_command("cam 3") #does not work
         iface.give_up()
     
 
@@ -120,14 +167,7 @@ class GenClient(Client):
                 # Initialize step
                 self.init_step=False
                 self.current_step+=1
-                self.im=self.sv.getScreenImg() #try
-                #self.img=Image.fromarray(self.img,"RGB")
-                #self.img.save(f"{self.time}".zfill(10)+".png")
-                #self.img = ImageGrab.grab()
-                #Image.new(self.img).save(f"{self.time}".zfill(10)+".png")
-                self.L_pix_lines=self.sv.L_pix_lines
-                #self.img = ImageGrab.grab()
-                self.L_raycast = get_raycast(self.im,self.L_pix_lines)
+                self.L_raycast = self.sv.getScreenIntersect()
                 self.inputs=self.L_raycast
                 self.inputs.append(speed)
                 self.inputs.append(self.yaw)
@@ -146,10 +186,7 @@ class GenClient(Client):
                 # Update step
                 #one screenshot every skip_frame frames
                 if self.current_step%self.skip_frames==0:
-                    self.im=self.sv.getScreenImg()
-                    #self.img.save("test.png") #to work on the frame processing
-                    self.L_pix_lines=self.sv.L_pix_lines
-                    self.L_raycast = get_raycast(self.im,self.L_pix_lines)
+                    self.L_raycast = self.sv.getScreenIntersect()
                     self.inputs=self.L_raycast
                     self.inputs.append(speed)
                     self.inputs.append(self.yaw)
@@ -166,7 +203,7 @@ class GenClient(Client):
                 self.L_inputs[self.current_i].append([self.time,self.accelerate,self.brake,self.steer])
                 iface.set_input_state(accelerate=self.accelerate,brake=self.brake,steer=self.steer)
                 #score for moving up to 0.04 per frame
-                self.fitness+=self.speed/10000
+                self.fitness+=self.scorer.score_step(self.speed)
                 self.current_step+=1
                 #update nn situation
                 #input to nn
@@ -206,7 +243,6 @@ class GenClient(Client):
                             iface.close()
                             self.finished=True
 
-
     def on_simulation_begin(self, iface):
         """ Called when a new simulation session is started (when validating a replay).
         """
@@ -241,10 +277,12 @@ class GenClient(Client):
         None
         """
         # Increase this client's fitness
-        self.fitness+=10000/(self.time/1000)
+        self.fitness+=self.scorer.score_checkpoint(self.time)
+        self.reporter.checkpoint_crossed(current, self.time)
         if current==target:#case of a finish
             # High reward based on time
-            self.fitness+=100000/(self.time/10000)
+            self.reporter.finish_crossed(self.time)
+            self.fitness+=self.scorer.score_finish(self.time)
             #iface.log(str(self.fitness))
             iface.prevent_simulation_finish() # Prevents the game from stopping the simulation after a finished race
             
@@ -313,23 +351,25 @@ class GenClient(Client):
 
 
 # NEAT Trainer class
-class NEATTrainer(TMTrainer):
+class NEATTrainer():
     """ NEAT TM Trainer.
     This class has NEAT-related methods :
         - Genomes evaluation
         - Training run
     """
-    def __init__(self, model_dir, model_config, w, h, window_name, 
-    n_lines, server_name, gamespeed, skip_frames, 
-    kill_time, kill_speed, max_time, no_lines, 
-    screen_viewer, checkpoint=None):
-        super().__init__(model_dir, model_config, w, h, window_name, 
-        n_lines, server_name, gamespeed, skip_frames, 
-        kill_time, kill_speed, max_time, no_lines,
-        screen_viewer, checkpoint)
+    def __init__(self):
+        self.filename_prefix = model_dir + "/Checkpoints/checkpoint-"
+        self.logger = Logger(model_dir)
+        if checkpoint == None:
+            self.gen = 0
+        else:
+            checkpoint_infos = checkpoint.split('/')[-1].split('-')
+            self.gen = int(checkpoint_infos[-1])
+        self.superviser=Superviser(threshold,D_maps,D_maps_times,replay_interval)
 
 
-    def run_client_gen(self, client: Client, server_name: str = 'TMInterface0', buffer_size=DEFAULT_SERVER_SIZE):
+
+    def run_client_gen(self, client: Client, buffer_size=DEFAULT_SERVER_SIZE):
         """
         Connects to a server with the specified server name and registers the client instance.
         The function closes the connection on SIGBREAK and SIGINT signals and will block
@@ -366,7 +406,7 @@ class NEATTrainer(TMTrainer):
             time.sleep(0)
         iface.close()
 
-        return client.L_fit,client.L_coords,client.L_speeds,client.L_inputs
+        return client.L_fit,client.L_coords,client.L_speeds,client.L_inputs,client.reporter
 
 
     def eval_genomes(self, genomes, config):
@@ -386,43 +426,33 @@ class NEATTrainer(TMTrainer):
         self.gen+=1
         L_net=[]
         for genome_id, genome in genomes:
-            net = neat.nn.FeedForwardNetwork.create(genome, config)
+            net = neat.nn.RecurrentNetwork.create(genome, config)
+            net.reset()
             L_net.append(net)
-        max_time2=min(self.max_time,1+0.5*self.gen)
+        max_time2=min(max_time,1+0.5*self.gen)
 
+        #TODO: check if bug
+        #case of bug: launch again the generation
         # Run gen
-        L_fit,L_coords,L_speeds,L_inputs=self.run_client_gen(GenClient(L_net,max_time2,self.kill_time, self.screen_viewer, self.skip_frames, self.window_name, self.gamespeed, self.kill_speed),self.server_name) #1/6 de sec en plus par génération
+        L_fit,L_coords,L_speeds,L_inputs,reporter=self.superviser.train(self.run_client_gen,GenClient,L_net)
+        reporter.report(self.gen,len(L_fit))
+        # Save log data before checking whether to change map
+        # TODO : add map when map correctly dealt with in superviser
+        log_data = {
+            'fitness': L_fit,
+            'coords': L_coords,
+            'speeds': L_speeds,
+            'inputs': L_inputs
+        }
+        # Write generation recap
+        self.logger.log(log_data, self.gen-1)
+        #TODO: ADD superviser call here to change map if good scores
+        self.superviser.supervise(L_fit)
+
 
         # Update fitness
         for i in range(len(L_fit)):
             genomes[i][1].fitness=L_fit[i]
-
-        # Write generation recap
-        filename = self.model_dir+'/Coords/'+str(self.gen).zfill(5)+'.pickle'
-        outfile = open(filename,'wb')
-        pickle.dump(L_coords,outfile)
-        outfile.close()
-        filename = self.model_dir+'/Speeds/'+str(self.gen).zfill(5)+'.pickle'
-        outfile = open(filename,'wb')
-        pickle.dump(L_speeds,outfile)
-        outfile.close()
-
-        for i in range(len(L_inputs)):
-            filename=self.model_dir+"/Inputs/"+str(self.gen).zfill(5)+'_'+str(i).zfill(3)
-            l_inputs=L_inputs[i]
-            outfile = open(filename,'a')
-            for j in range(len(l_inputs)):
-                inputs=l_inputs[j]
-                time=inputs[0]
-                accelerate=inputs[1]
-                brake=inputs[2]
-                steer=inputs[3]
-                if accelerate:
-                    outfile.write(str(time)+'press up\n')
-                if brake:
-                    outfile.write(str(time)+'press down\n')
-                outfile.write(str(time)+'steer '+str(steer).zfill(5)+'\n')
-            outfile.close()
 
 
     def run(self, no_generations=1000):
@@ -442,12 +472,12 @@ class NEATTrainer(TMTrainer):
         # Load configuration.
         config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                             neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                            self.model_config)
+                            model_config)
 
         # Create the population, which is the top-level object for a NEAT run.
         p = neat.Population(config)
-        if not self.checkpoint == None:
-            p = neat.Checkpointer.restore_checkpoint(self.checkpoint)
+        if not checkpoint == None:
+            p = neat.Checkpointer.restore_checkpoint(checkpoint)
 
         # Add a stdout reporter to show progress in the terminal.
         p.add_reporter(neat.StdOutReporter(True))
@@ -478,11 +508,7 @@ class NEATTrainer(TMTrainer):
         # p.run(eval_genomes, 10)
 
 
-def train_neat(model_dir="./models/NEAT",
-    run_config="./models/config.ini",
-    model_config="./models/NEAT/config-feedforward",
-    checkpoint="./models/NEAT/Checkpoints/checkpoint-0",
-    no_generations=1000):
+def train_neat():
     """
     Main function.
 
@@ -499,21 +525,12 @@ def train_neat(model_dir="./models/NEAT",
     None
     """
     # Read run config file
-    config_file = configparser.ConfigParser()
-    config_file.read(run_config)
+
 
     # Define config variables
-    w, h, window_name = int(config_file['Window']['w']), int(config_file['Window']['h']), config_file['Window']['window_name']
-    n_lines = int(config_file['Image']['n_lines'])
-    server_name, gamespeed, skip_frames = config_file['Game']['server_name'], int(config_file['Game']['gamespeed']), int(config_file['Game']['skip_frames'])
-    kill_time, kill_speed = int(config_file['Game']['kill_time']), int(config_file['Game']['kill_speed'])
-    max_time, no_lines = int(config_file['Game']['max_time']), int(config_file['Game']['no_lines'])
-    screen_viewer = ScreenViewer(n_lines, w, h)
 
-    trainer = NEATTrainer(model_dir, model_config, w, h, window_name, 
-    n_lines, server_name, gamespeed, skip_frames,
-    kill_time, kill_speed, max_time, no_lines,
-    screen_viewer, checkpoint)
+
+    trainer = NEATTrainer()
 
     # Wait for user's input
     print('Press z to begin.')
@@ -524,8 +541,6 @@ def train_neat(model_dir="./models/NEAT",
 
 
 if __name__ == '__main__':
-    train_neat(model_dir="../models/NEAT",
-    run_config="../models/config.ini",
-    model_config="../models/NEAT/config-feedforward",
-    checkpoint="../models/NEAT/Checkpoints/checkpoint-0",
-    no_generations=1000)
+    train_neat()
+
+#NOTA BENE: for the supervisor to work, the TMInterface window has to be selected when changing maps

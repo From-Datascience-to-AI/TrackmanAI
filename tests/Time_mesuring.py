@@ -1,17 +1,18 @@
+#the goal of this script is to accurately mesure the time taken by 
+#the screenshot pipeline
+from operator import index
+import numpy as np
 import win32gui
 import win32con
 import win32ui
-from threading import Thread, Lock
-from PIL import Image
-from time import time
 import keyboard
-import numpy as np
-import matplotlib.pyplot as plt
+from time import time
+import multiprocessing
+from functools import partial
 
-#goal of this script: testing the screenshot part and mesuring the time taken
-w=640
-h=480
-l=400
+l=300
+
+
 class ScreenViewer:
     """ Asynchronously captures screens of a window. Provides functions for accessing the captured screen.
     (from https://nicholastsmith.wordpress.com/2017/08/10/poe-ai-part-4-real-time-screen-capture-and-plumbing/?fbclid=IwAR3ZHfVY2oPr1kqhq_o4EthijXh1GLDoK2FYw3bWReRWMUEBWTB8_jhwd1Q)
@@ -31,10 +32,10 @@ class ScreenViewer:
         self.w = w
         self.h = h
         self.L_pix_lines=self.get_pix_lines(n_lines)
-        self.L_pix_lines=self.get_pix_lines2(n_lines)
+        self.L_pix_lines2=self.get_pix_lines2(n_lines)
         self.L_indexT=[tuple(np.array(line)[:,::-1].T.tolist()) for line in self.L_pix_lines]
-        if not self.getHWND(wname):
-            raise Exception("HWND is none. HWND not called or invalid window name provided.")
+        self.L_indexT2=[tuple(np.array(line)[:,::-1].T.tolist()) for line in self.L_pix_lines2]
+        self.getHWND(wname)
 
     def getHWND(self, wname):
         """ Gets handle of window to view.
@@ -55,6 +56,7 @@ class ScreenViewer:
         self.l, self.t, self.r, self.b = win32gui.GetWindowRect(self.hwnd)
         return True
          
+
     def getScreenImg(self):
         """ Gets the screen of the window referenced by self.hwnd
     
@@ -184,10 +186,9 @@ class ScreenViewer:
             if x_inv:
                 line.reverse()
             return line ## Finally, return the line!
-    
+
     def getLine2(self,x1,y1,x2,y2,l):
         return [(int(x1+i*(x2-x1)/l),int(y1+i*(y2-y1)/l)) for i in range(l+1)]
-
 
     def intersect(self,indexT,im):
         """ Gets the intersection index between the line and a different color object (i.e. a wall)
@@ -225,7 +226,7 @@ class ScreenViewer:
         mask=pixels<30
         mask=mask.tolist()
         mask.append(True)#end of axis 1 is True
-        return mask.index(True)
+        return 2*mask.index(True)/len(indexT[0])-1
 
     def get_raycast(self,im,L_indexT):
         """ Gets every (corrected) raycasts on the image
@@ -238,6 +239,20 @@ class ScreenViewer:
         #try using also return[]
         for indexT in L_indexT:
             inter=self.intersect(indexT,im)
+            L_intersect_normed.append(inter)
+        return L_intersect_normed
+
+    def get_raycast2(self,im,L_indexT):
+        """ Gets every (corrected) raycasts on the image
+        """
+        #impossible to use numpy because of the len of lines not equal
+        
+        #return list(map(partial(self.intersect2,im=im),L_indexT)) #to test next
+        L_intersect_normed=[]
+        #append=L_intersect_normed.append to test next [self.intersect2(indexT,im) for iter in L_indexT]
+        #try using also return[]
+        for indexT in L_indexT:
+            inter=self.intersect2(indexT,im)
             L_intersect_normed.append(inter)
         return L_intersect_normed
 
@@ -259,10 +274,9 @@ class ScreenViewer:
             L_pix_lines.append(self.getLine2(c[0],c[1],L_end_points[i][0],L_end_points[i][1],l))
         return L_pix_lines
 
-
     def getScreenIntersect(self):
         im=self.getScreenImg()
-        L_intersect=self.get_raycast(im,self.L_indexT)
+        L_intersect=self.get_raycast(im,self.L_pix_lines)
         return L_intersect
 
     def getScreenIntersect_timed(self):
@@ -274,60 +288,64 @@ class ScreenViewer:
         c=time()-a
         return L_intersect,[b,c]
 
-    def test_intersect(self,n_lines,im,n_img):
-        c,L_end_points=self.get_end_points(n_lines)
-        L_pix_lines=self.L_pix_lines
-        L_intersect=[]
-        for i in range(len(L_pix_lines)):
-            L_intersect.append(self.intersect2(self.L_indexT[i],im))
+    def getScreenIntersect_timed2(self):
+        a=time()
+        im=self.getScreenImg()
+        b=time()-a
+        a=time()
+        L_intersect=self.get_raycast2(im,self.L_indexT2)
+        c=time()-a
+        return L_intersect,[b,c]
 
-        im=im.copy()
-        for i in range(len(L_pix_lines)):
-            line=L_pix_lines[i]
-            inter=L_intersect[i]
-            if inter==len(line):
-                #print(line[-2])
-                for j in range(len(line)):
-                    #print(line[j])
-                    #print(im.shape)
-                    im[line[j][1]][line[j][0]]=[255,255,255]
-                plt.plot(L_end_points[i][0],L_end_points[i][1],color='g',marker='+',markersize=10)
-            else:
-                for j in range(inter):
-                    im[line[j][1]][line[j][0]]=[255,255,255]
-                plt.plot(line[inter][0],line[inter][1],color='g',marker='+',markersize=10)
-        img=Image.fromarray(im,"RGB")
-        
-        #img.save(f"{n_img}".zfill(10)+".png")
-        plt.imshow(img)
-        plt.savefig(f"{n_img}".zfill(10)+".png")
-        plt.clf()
-        #plt.show()
-        #function to display the intesecting points and the lines
-        #to ensure it is working as it is meant to
 
 if __name__=="__main__":
-    
-    #issue following the pixel lines, lists are not in the right order
-    #need to debug intersect
-
+    #TODO: check identical results
     sv=ScreenViewer(20,640,480,'TrackMania United Forever (TMInterface 1.3.1)')
-    n_img=0
-    n_lines=20
     print('Press z to begin.')
     keyboard.wait('z')
-    for i in range(1):
-        n_img+=1
-        a=time()
-        im=sv.getScreenImg()
-        L_raycast = sv.get_raycast(im,sv.L_indexT)
-        t=time()-a
-        #img.save(f"{n_img}".zfill(10)+".png")
-        #draw_rays(10,img)
-        sv.test_intersect(20,im,i)
-        #draw_pixel_lines(10,img)
-        print(t)
+    L_times=[]
+    L_times2=[]
+    for i in range(100):
+        L_intersect,L_ab=sv.getScreenIntersect_timed()
+        L_intersect2,L_ab2=sv.getScreenIntersect_timed2()
+        L_times.append(L_ab)
+        L_times2.append(L_ab2)
 
-#issue wwith h and w, got 1038 instead of 1280 and 806 instead of 960
-#choice made to fix the dimention of the window
-#most of the time taken is to convert the array to image
+    print("for current implementation")
+    avg_a=sum([L_times[i][0] for i in range(len(L_times))])/len(L_times)
+    avg_b=sum([L_times[i][1] for i in range(len(L_times))])/len(L_times)
+    max_a=max([L_times[i][0] for i in range(len(L_times))])
+    max_b=max([L_times[i][1] for i in range(len(L_times))])
+    max_c=max([L_times[i][0]+L_times[i][1] for i in range(len(L_times))])
+    avg_c=sum([L_times[i][0]+L_times[i][1] for i in range(len(L_times))])/len(L_times)
+    print(f"average time taken for screenshot ={avg_a}")
+    print(f"average time taken for screenshot processing ={avg_b}")
+    print(f"average time taken for screenshot pipeline ={avg_c}")
+    print(f"average framerate for screenshot pipeline ={1/avg_c}")
+    print(f"minimum framerate for screenshot pipeline ={1/max_c}")
+    print()
+    print("for test implementation")
+    avg_a2=sum([L_times2[i][0] for i in range(len(L_times2))])/len(L_times2)
+    avg_b2=sum([L_times2[i][1] for i in range(len(L_times2))])/len(L_times2)
+    max_a2=max([L_times2[i][0] for i in range(len(L_times2))])
+    max_b2=max([L_times2[i][1] for i in range(len(L_times2))])
+    max_c2=max([L_times2[i][0]+L_times2[i][1] for i in range(len(L_times2))])
+    avg_c2=sum([L_times2[i][0]+L_times2[i][1] for i in range(len(L_times2))])/len(L_times2)
+    print(f"average time taken for screenshot ={avg_a2}")
+    print(f"average time taken for screenshot processing ={avg_b2}")
+    print(f"average time taken for screenshot pipeline ={avg_c2}")
+    print(f"average framerate for screenshot pipeline ={1/avg_c2}")
+    print(f"minimum framerate for screenshot pipeline ={1/max_c2}")
+    print()
+    print("comparison")
+    print(f"average time taken for screenshot gain ={avg_a-avg_a2}")
+    print(f"average time taken for screenshot processing gain ={avg_b2-avg_b}")
+    print(f"average time taken for screenshot pipeline gain ={avg_c-avg_c2}")
+    print(f"average framerate for screenshot pipeline gain ={1/avg_c2-1/avg_c}")
+    print(f"minimum framerate for screenshot pipeline gain ={1/max_c2-1/max_c}")
+    print()
+    print(f"average time taken for screenshot gain% ={100*avg_a/avg_a2-100}")
+    print(f"average time taken for screenshot processing gain% ={100*avg_b/avg_b2-100}")
+    print(f"average time taken for screenshot pipeline gain% ={100*avg_c/avg_c2-100}")
+    print(f"average framerate for screenshot pipeline gain% ={100*(1/avg_c)/(1/avg_c2)-100}")
+    print(f"minimum framerate for screenshot pipeline gain% ={100*(1/max_c)/(1/max_c2)-100}")

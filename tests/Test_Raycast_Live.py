@@ -117,17 +117,28 @@ def draw_rays(n_rays,img): #OK
     plt.show()
 
 def get_end_points(n_rays):
-    shape=(1279,959)
+    """ Gets the end points for a given number of rays
+
+    Parameters
+    ----------
+    n_rays: int (number of rays to consider)
+
+    Output
+    ----------
+    start_point: (int, int) (start point for rays propagation)
+    L_points : Array([int, int]) (coords of every end point)
+    """
+    shape=(639,479) #todo: use shape from config
     start_point=(int(shape[0]/2),shape[1]-60) #OK
     L_teta=[ np.pi*i/(n_rays-1) for i in range(n_rays)] #OK
     ll=((start_point[0]-0)**2 + (start_point[1]-0)**2)**0.5
-    lr=((start_point[0]-1279)**2 + (start_point[1]-0)**2)**0.5
+    lr=((start_point[0]-shape[0])**2 + (start_point[1]-0)**2)**0.5
     tetal=np.arccos(-(start_point[0]-0)/ll)#ok
-    tetar=np.arccos(-(start_point[0]-1279)/lr)#ok
+    tetar=np.arccos(-(start_point[0]-shape[0])/lr)#ok
     L_end_points=[]
     for teta in L_teta:
         if teta<=tetar:
-            x=1279
+            x=shape[0]
             if x-start_point[0]!=0:
                 l=abs((x-start_point[0])/np.cos(teta))
                 y=-l*np.sin(teta)+start_point[1]
@@ -242,6 +253,17 @@ def intersect(im,line):
             print(pix)
     return len(line)
 
+def np_intersect(im,line):
+    indexT=np.array(line)[:,::-1].T.tolist()
+    pixels=im[tuple(indexT)]
+    pixels=np.sum(pixels,axis=1)/len(im[0][0])
+    mask=pixels<30
+    mask=mask.tolist()
+    try:
+        return mask.index(True)
+    except:
+        return len(line)
+
 def test_intersect(n_lines,im,n_img):
     c,L_end_points=get_end_points(n_lines)
     L_pix_lines=[]
@@ -260,21 +282,12 @@ def test_intersect(n_lines,im,n_img):
         if inter==len(line):
             #print(line[-2])
             for j in range(len(line)):
-                
-                if line[j][1]>959:
-                    line[j][1]=959
-                if line[j][0]>1279:
-                    line[j][0]=1279
                 #print(line[j])
                 #print(im.shape)
                 im[line[j][1]][line[j][0]]=[255,255,255]
             plt.plot(L_end_points[i][0],L_end_points[i][1],color='g',marker='+',markersize=10)
         else:
             for j in range(inter):
-                if line[j][1]>959:
-                    line[j][1]=959
-                if line[j][0]>1279:
-                    line[j][0]=1279
                 im[line[j][1]][line[j][0]]=[255,255,255]
             plt.plot(line[inter][0],line[inter][1],color='g',marker='+',markersize=10)
     img=Image.fromarray(im,"RGB")
@@ -287,7 +300,41 @@ def test_intersect(n_lines,im,n_img):
     #function to display the intesecting points and the lines
     #to ensure it is working as it is meant to
     
-
+def test_intersect_np(n_lines,im,n_img):
+    c,L_end_points=get_end_points(n_lines)
+    L_pix_lines=[]
+    for i in range(len(L_end_points)):
+        L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+    L_intersect=[]
+    for i in range(len(L_pix_lines)):
+        L_intersect.append(np_intersect(im,L_pix_lines[i]))
+    
+    #for i in range(len(L_end_points)):
+    #    plt.plot([c[0],L_end_points[i][0]],[c[1],L_end_points[i][1]],color='r')
+    im=im.copy()
+    for i in range(len(L_pix_lines)):
+        line=L_pix_lines[i]
+        inter=L_intersect[i]
+        if inter==len(line):
+            #print(line[-2])
+            for j in range(len(line)):
+                #print(line[j])
+                #print(im.shape)
+                im[line[j][1]][line[j][0]]=[255,255,255]
+            plt.plot(L_end_points[i][0],L_end_points[i][1],color='g',marker='+',markersize=10)
+        else:
+            for j in range(inter):
+                im[line[j][1]][line[j][0]]=[255,255,255]
+            plt.plot(line[inter][0],line[inter][1],color='g',marker='+',markersize=10)
+    img=Image.fromarray(im,"RGB")
+    
+    #img.save(f"{n_img}".zfill(10)+".png")
+    plt.imshow(img)
+    plt.savefig(f"np_{n_img}".zfill(10)+".png")
+    plt.clf()
+    #plt.show()
+    #function to display the intesecting points and the lines
+    #to ensure it is working as it is meant to
 
 def Get_Raycast(im,n_lines):
     print("a")
@@ -309,7 +356,25 @@ def Get_Raycast(im,n_lines):
     print(time()-c)#0.02
     return L_intersect_normed
 
-
+def Get_Raycast_np(im,n_lines):
+    print("a")
+    a=time()
+    c,L_end_points=get_end_points(n_lines) 
+    print(time()-a)#0.0
+    print("b")
+    b=time()
+    L_pix_lines=[]
+    for i in range(len(L_end_points)):
+        L_pix_lines.append(getLine(c[0],c[1],L_end_points[i][0],L_end_points[i][1]))
+    print(time()-b)#0.015
+    print("c")
+    c=time()
+    L_intersect_normed=[]
+    for i in range(len(L_pix_lines)):
+        inter=np_intersect(im,L_pix_lines[i])
+        L_intersect_normed.append(inter/len(L_pix_lines[i]))
+    print(time()-c)#0.02
+    return L_intersect_normed
 
 if __name__=="__main__":
     
@@ -322,6 +387,8 @@ if __name__=="__main__":
     n_lines=20
     print('Press z to begin.')
     keyboard.wait('z')
+    L_times=[]
+    L_times_np=[]
     while True:
         n_img+=1
         a=time()
@@ -330,12 +397,18 @@ if __name__=="__main__":
         t=time()-a
         #img.save(f"{n_img}".zfill(10)+".png")
         #draw_rays(10,img)
+        a=time()
         test_intersect(20,im,n_img)
         #draw_pixel_lines(10,img)
-        print(t)
+        L_times.append(time()-a)
+        a=time()
+        test_intersect_np(20,im,n_img)
+        L_times_np.append(time()-a)
         if keyboard.is_pressed("z"):
             print("z pressend, ending loop")
             break
+    print(sum(L_times))
+    print(sum(L_times_np))#quicker
 
 
     
