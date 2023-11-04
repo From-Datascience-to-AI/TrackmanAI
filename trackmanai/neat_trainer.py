@@ -3,18 +3,19 @@ Functions to use to build a NEAT system.
 """
 
 # Imports
-import os
+import time
 import keyboard
 import neat
 from utils import ScreenViewer, Logger, Superviser, Scorer, Reporter
 import pickle as pickle
 import configparser
 import signal
-from tminterface.interface import TMInterface
 from tminterface.client import Client
+from tminterface.interface import TMInterface
 from tminterface.constants import DEFAULT_SERVER_SIZE
 import time
 import numpy as np
+
 
 # In order to visualize the training net, you need to copy visualize.py file into the NEAT directory (you can find it in the NEAT repo)
 # Because of the licence, I am not going to copy it to my github repository
@@ -172,6 +173,7 @@ class GenClient(Client):
                 self.inputs.append(self.yaw)
                 self.inputs.append(self.pitch)
                 self.inputs.append(self.roll)
+                print(self.inputs)
                 #iface.log(str(self.img[:-4]))
                 output = np.array(self.net.activate(self.inputs))
                 #inputs

@@ -15,7 +15,6 @@ import time
 import signal
 import pickle as pickle
 
-
 # Classes
 class ScreenViewer:
     """ Asynchronously captures screens of a window. Provides functions for accessing the captured screen.
